@@ -1,0 +1,2 @@
+relationship,relationship_status,iam_unique_sessions,firewall_unique_sessions,shared_session_ids,iam_only_sessions,firewall_only_sessions,session_match_rate_iam_pct,session_match_rate_firewall_pct
+IAM session_id <-> Firewall session_id,Weak / Rejected,11452,25133,303,11149,24830,2.65,1.21

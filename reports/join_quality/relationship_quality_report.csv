@@ -1,0 +1,9 @@
+source,relationship,relationship_status,rows,matched,missing,unmatched,match_rate_pct,usable_pairs,consistent_pairs,inconsistent_pairs,consistency_rate_pct
+IAM,user_id -> identity,Strong,20000,18498,0,1502,92.49,,,,
+IAM,hostname -> identity,Strong,20000,17813,1170,1017,94.6,,,,
+IAM,device_id -> identity,Moderate,20000,13549,3528,2923,82.25,,,,
+IAM,user_id + hostname -> identity,Moderate,20000,,,,,18830,16596,2234,88.14
+Endpoint,user_id -> identity,Strong,8000,7373,0,627,92.16,,,,
+Endpoint,hostname -> identity,Strong,8000,7037,481,482,93.59,,,,
+Endpoint,user_id + hostname -> identity,Moderate,8000,,,,,7519,5968,1551,79.37
+Firewall,hostname -> identity,Strong,30000,26665,1757,1578,94.41,,,,

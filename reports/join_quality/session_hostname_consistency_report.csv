@@ -1,0 +1,2 @@
+shared_sessions_checked,hostname_consistent_sessions,hostname_inconsistent_sessions,sessions_without_hostname_evidence,timestamp_within_60_minutes,session_join_decision
+303,0,248,55,0,Rejected

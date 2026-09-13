@@ -1,0 +1,12 @@
+metric,value
+raw_rows,20500
+raw_columns,15
+exact_duplicates_removed,500
+final_rows,20000
+final_columns,17
+duplicate_event_ids,0
+missing_timestamps,2416
+missing_user_ids,0
+missing_session_ids,8476
+device_conflicting_ids,50
+device_conflict_records,658

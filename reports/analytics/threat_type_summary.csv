@@ -1,0 +1,5 @@
+threat_type,detection_count
+Post-Termination Activity,367
+Identity / Hostname Mismatch,216
+Suspicious Administrative Activity,119
+Malware + Lateral Movement,40

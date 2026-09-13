@@ -1,0 +1,17 @@
+metric,value
+raw_rows,8240
+raw_unique_alert_ids,8000
+exact_duplicate_rows_removed,240
+final_rows,8000
+final_unique_alert_ids,8000
+remaining_duplicate_alert_id_rows,0
+missing_user_id,0
+missing_hostname,481
+invalid_detected_timestamp,0
+invalid_resolved_timestamp,0
+impossible_resolution,263
+resolved_without_timestamp,838
+unresolved_with_resolution_timestamp,3695
+missing_sha256,1438
+invalid_sha256,799
+rows_requiring_review,5168
