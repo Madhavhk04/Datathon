@@ -35,3 +35,61 @@ body{background:#080c15;color:#e9eefb}.app-shell{background:linear-gradient(135d
 /* Align KPI cards to the reference composition: centered copy, anchored chart. */
 .stat-card{min-height:150px;padding:18px 20px}.stat-value{text-align:center;margin-top:27px;line-height:1}.stat-detail{text-align:center;padding:0 52px 0 18px;margin-top:10px;white-space:nowrap}.mini-bars{right:20px;bottom:20px;width:48px;height:39px;gap:3px;align-items:end}.mini-bars i{width:6px;border-radius:3px 3px 1px 1px}
 .stat-label span{display:none}.mini-bars{bottom:29px}
+
+/* AI Analyst Workspace Styles */
+.analyst-workspace { display: grid; gap: 20px; max-width: 1200px; margin: 0 auto; }
+.analyst-hero { background: linear-gradient(135deg, #161e33 0%, #101627 100%); border: 1px solid #2d3b5c; border-radius: 10px; padding: 22px 28px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 30px #02071266; }
+.analyst-hero-text h2 { margin: 4px 0 6px; font-size: 24px; color: #f0f4ff; }
+.analyst-hero-text p { margin: 0; color: #8fa0c4; font-size: 13px; max-width: 650px; }
+.active-user-badge { display: flex; align-items: center; gap: 10px; background: #1c2742; border: 1px solid #3b4e7a; padding: 8px 14px; border-radius: 8px; font-size: 12px; color: #d0dcff; }
+.active-user-badge select { background: #11182a; color: #7db1ff; border: 1px solid #2d3d66; border-radius: 4px; padding: 4px 8px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+.quick-prompts-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.quick-prompts-bar label { font: 10px 'DM Mono'; color: #7586a9; letter-spacing: 1px; margin-right: 4px; }
+.chip-btn { background: #151d30; border: 1px solid #293859; color: #9bb0db; padding: 6px 12px; border-radius: 18px; font-size: 11px; font-weight: 600; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
+.chip-btn:hover { background: #222f4c; border-color: #5572b8; color: #ffffff; transform: translateY(-1px); }
+
+.chat-history { display: flex; flex-direction: column; gap: 20px; min-height: 380px; }
+.chat-message { display: flex; flex-direction: column; gap: 10px; max-width: 100%; animation: fadeIn 0.3s ease-in-out; }
+.chat-message.user { align-self: flex-end; max-width: 80%; }
+.chat-message.user .chat-bubble { background: linear-gradient(135deg, #2b3e70, #1c2a4f); border: 1px solid #435b9c; border-radius: 12px 12px 2px 12px; padding: 14px 18px; color: #eaf0ff; font-weight: 500; }
+.chat-message.ai .chat-bubble { background: linear-gradient(145deg, #131b2e, #0e1423); border: 1px solid #263554; border-radius: 12px 12px 12px 2px; padding: 22px 26px; color: #dce5fa; box-shadow: 0 8px 24px #02061044; }
+
+.ai-message-meta { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1f2b45; padding-bottom: 12px; margin-bottom: 14px; font-size: 11px; color: #7f92ba; }
+.ai-agent-label { font-weight: 800; color: #8fa7ff; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
+.ai-agent-label span { color: #a98eff; font-size: 15px; }
+.data-sources-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.ds-tag { font: 9px 'DM Mono'; background: #19243d; border: 1px solid #2d3e66; color: #8ca3d4; padding: 2px 7px; border-radius: 4px; }
+
+.ai-markdown-content h3 { font-size: 14px; color: #9bb1ff; letter-spacing: 0.5px; margin: 16px 0 8px; border-bottom: 1px solid #202c47; padding-bottom: 4px; text-transform: uppercase; }
+.ai-markdown-content h4 { font-size: 13px; color: #edf2ff; margin: 12px 0 6px; }
+.ai-markdown-content p { margin: 6px 0 10px; line-height: 1.6; color: #ccd6f0; }
+.ai-markdown-content ul { margin: 6px 0 12px; padding-left: 20px; display: grid; gap: 6px; }
+.ai-markdown-content li { color: #c4d3f5; line-height: 1.5; }
+.ai-markdown-content code { font: 11px 'DM Mono'; background: #18223b; color: #8fa7ff; padding: 2px 6px; border-radius: 4px; border: 1px solid #2c3a5e; }
+.ai-markdown-content strong { color: #ffffff; }
+
+.report-embed-card { background: #0c1220; border: 1px solid #2b3c63; border-radius: 8px; padding: 18px; margin: 16px 0; }
+.report-embed-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1c2742; padding-bottom: 12px; margin-bottom: 14px; }
+.report-user-info h4 { margin: 0; font-size: 16px; color: #ffffff; }
+.report-user-info p { margin: 3px 0 0; font-size: 11px; color: #8294bd; }
+
+.risk-breakdown-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.rb-item { background: #12192b; border: 1px solid #202b45; padding: 10px 12px; border-radius: 6px; }
+.rb-item label { display: flex; justify-content: space-between; font-size: 10px; color: #8092ba; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; }
+.rb-bar { height: 5px; background: #1d273f; border-radius: 3px; overflow: hidden; }
+.rb-bar i { height: 100%; display: block; border-radius: 3px; background: linear-gradient(90deg, #748cff, #ff7f9a); }
+
+.chat-input-panel { background: #101627; border: 1px solid #293859; border-radius: 10px; padding: 10px 14px; display: flex; gap: 12px; align-items: center; box-shadow: 0 10px 30px #02071288; }
+.chat-input-panel input { flex: 1; background: transparent; border: 0; color: #edf2ff; font-size: 14px; padding: 8px 4px; }
+.chat-input-panel input::placeholder { color: #64759d; }
+.chat-input-panel input:focus { outline: none; }
+.send-btn { background: linear-gradient(135deg, #4d60be, #755bb0); border: 1px solid #7084d5; color: #ffffff; padding: 10px 20px; border-radius: 6px; font-weight: 700; font-size: 12px; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
+.send-btn:hover { background: linear-gradient(135deg, #5b70d4, #876ac4); transform: translateY(-1px); box-shadow: 0 4px 14px #4d60be66; }
+.send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.thinking-indicator { display: flex; align-items: center; gap: 8px; font: 11px 'DM Mono'; color: #8fa7ff; padding: 10px 0; }
+.thinking-dot { width: 8px; height: 8px; background: #8fa7ff; border-radius: 50%; animation: pulse 1s infinite ease-in-out; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
