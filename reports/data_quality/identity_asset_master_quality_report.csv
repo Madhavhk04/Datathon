@@ -1,0 +1,15 @@
+column,rows,missing_count,missing_pct,unique_values
+full_name,3000,0,0.0,2988
+role,3000,0,0.0,10
+user_id,3000,0,0.0,3000
+department,3000,0,0.0,15
+location,3000,564,18.8,7
+status,3000,0,0.0,4
+hire_date,3000,329,10.97,2618
+termination_date,3000,2631,87.7,367
+username,3000,124,4.13,2876
+hostname,3000,171,5.7,2829
+device_id,3000,569,18.97,2391
+manager_username,3000,637,21.23,821
+device_id_conflict,3000,0,0.0,2
+device_user_count,3000,0,0.0,4

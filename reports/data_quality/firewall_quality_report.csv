@@ -1,0 +1,16 @@
+column,rows,missing_count,missing_pct,unique_values
+log_id,30000,0,0.0,30000
+timestamp,30000,3517,11.72,21508
+hostname,30000,1757,5.86,4606
+src_ip,30000,15273,50.91,14423
+dst_ip,30000,14493,48.31,15333
+src_port,30000,7207,24.02,13
+dst_port,30000,7279,24.26,13
+protocol,30000,0,0.0,4
+action,30000,0,0.0,2
+bytes_sent,30000,5034,16.78,24423
+bytes_received,30000,5077,16.92,24444
+session_id,30000,4515,15.05,25133
+threat_flag,30000,0,0.0,2
+rule_name,30000,6022,20.07,8
+geo_country,30000,5023,16.74,5

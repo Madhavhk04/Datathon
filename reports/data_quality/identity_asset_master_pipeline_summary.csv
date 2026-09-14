@@ -1,0 +1,12 @@
+metric,value
+raw_rows,3090
+exact_duplicate_rows,90
+clean_rows,3000
+duplicate_user_id_rows,0
+missing_user_id,0
+missing_username,124
+missing_hostname,171
+missing_device_id,569
+device_conflict_records,79
+conflicting_devices,39
+termination_before_hire,0
