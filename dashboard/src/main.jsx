@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const rawApi = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const API = rawApi.replace(/\/+$/, '');
 const NAV = [
   ['overview', 'Overview', '⌂'], ['risk', 'Risk posture', '◈'], ['threats', 'Threat detections', '⚠'],
   ['queue', 'Investigation queue', '☷'], ['users', 'User investigations', '◎'], ['quality', 'Data quality', '◌'], ['analyst', 'Analyst workspace', '✦']

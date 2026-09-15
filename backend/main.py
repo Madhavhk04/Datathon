@@ -37,6 +37,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def normalize_path_middleware(request, call_next):
+    import re
+    path = request.scope.get("path", "")
+    if "//" in path:
+        request.scope["path"] = re.sub(r"/+", "/", path)
+    return await call_next(request)
+
 def load(name: str):
     with (ANALYTICS / name).open(encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
@@ -52,10 +60,12 @@ class AnalystQueryRequest(BaseModel):
     context_user_id: Optional[str] = None
 
 @app.get("/api/health")
+@app.get("/health")
 def health():
     return {"status": "ok", "mode": "read-only", "agent_available": AGENT_AVAILABLE}
 
 @app.get("/api/snapshot")
+@app.get("/snapshot")
 def snapshot():
     queue, threats, risk = load("investigation_queue.csv"), load("threat_detections.csv"), load("user_risk_scores.csv")
     for r in risk: r["risk_score"] = number(r, "risk_score")
@@ -74,6 +84,7 @@ def snapshot():
             "risk": risk, "threats": threats, "queue": queue, "quality": quality}
 
 @app.post("/api/analyst/query")
+@app.post("/analyst/query")
 def analyst_query(req: AnalystQueryRequest):
     if not AGENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="AI Analyst Agent not loaded")
@@ -134,6 +145,8 @@ def analyst_query(req: AnalystQueryRequest):
 
 @app.get("/api/investigate/{user_id}")
 @app.post("/api/investigate/{user_id}")
+@app.get("/investigate/{user_id}")
+@app.post("/investigate/{user_id}")
 def investigate(user_id: str):
     if not AGENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="AI Analyst Agent not loaded")
