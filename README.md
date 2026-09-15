@@ -54,6 +54,7 @@ A key design decision is that the **Identity & Asset Master is the canonical ide
 Datathon/
 │
 ├── README.md
+├── requirements.txt
 ├── .gitignore
 ├── run_pipeline.py
 │
@@ -107,7 +108,9 @@ Datathon/
 │   ├── agent.py
 │   ├── chat_analyst.py
 │   ├── investigator.py
-│   └── tools.py
+│   ├── tools.py
+│   ├── test_agent.py
+│   └── test_chat_demo.py
 │
 └── docs/
     └── data_dictionary.md
@@ -530,10 +533,10 @@ The runner also checks that the expected production outputs were created.
 
 ## Run the pipeline
 
-From the repository root, install the data-processing dependencies:
+From the repository root, install the dependencies:
 
 ```bash
-pip install pandas numpy openpyxl
+pip install -r requirements.txt
 ```
 
 Then run:
@@ -623,6 +626,27 @@ Explain
 ```
 
 The important guardrail is that the agent should not turn a risk score into a claim that a person is malicious. Its job is to bring the evidence together, build an understandable investigation view, and suggest reasonable next steps.
+
+### Run the AI Analyst directly
+
+Conduct a full security investigation for a specific user:
+
+```bash
+python agent/agent.py --user EMP11218
+```
+
+Run the interactive conversational analyst in the terminal:
+
+```bash
+python agent/chat_analyst.py
+```
+
+Run the agent verification suites:
+
+```bash
+python agent/test_agent.py
+python agent/test_chat_demo.py
+```
 
 ---
 
