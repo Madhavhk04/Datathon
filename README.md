@@ -602,6 +602,38 @@ POST /api/analyst/query
 GET  /api/investigate/{user_id}
 ```
 
+### Production Deployment
+
+#### 1. Frontend on GitHub Pages
+The dashboard includes an automated GitHub Actions workflow (`.github/workflows/deploy-frontend.yml`) and is pre-configured with relative asset paths (`base: './'`).
+
+1. In your GitHub repository, go to **Settings** → **Pages**.
+2. Under **Build and deployment** → **Source**, choose **GitHub Actions**.
+3. (Optional) To connect your deployed backend, go to **Settings** → **Secrets and variables** → **Actions** → **Variables**, click **New repository variable**, and set:
+   - **Name**: `VITE_API_URL`
+   - **Value**: `https://<your-backend-app>.onrender.com/api`
+4. Pushing to `main` will automatically build and deploy the dashboard to `https://<your-username>.github.io/<repo-name>/`.
+
+#### 2. Backend on Render (Recommended)
+Render is ideal for the FastAPI backend because it hosts persistent containers with full filesystem access to the cleaned CSV datasets.
+
+1. Sign in to [Render](https://render.com) and click **New** → **Web Service**.
+2. Connect your GitHub repository.
+3. Render automatically detects the repository's `render.yaml` blueprint. If configuring manually:
+   - **Environment**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+4. (Optional) Add `GEMINI_API_KEY` under **Environment Variables** if you want to enable cloud Gemini model calls.
+5. Click **Deploy Web Service**. Render provides a free HTTPS endpoint (e.g. `https://sentinel-soc-backend.onrender.com`).
+
+#### 3. Backend on Vercel (Alternative)
+The repository includes `vercel.json` configuring `@vercel/python` and bundling the `data/` and `agent/` dependencies:
+
+1. Import the repository in [Vercel](https://vercel.com).
+2. Set root directory or leave as repository root.
+3. (Optional) Add `GEMINI_API_KEY` under **Environment Variables**.
+4. Deploy.
+
 ---
 
 # 12. AI analyst layer
