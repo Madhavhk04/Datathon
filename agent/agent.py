@@ -4,6 +4,12 @@ import json
 import argparse
 from datetime import datetime
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from tools import (
     get_user_risk,
     get_user_threats,
@@ -214,14 +220,16 @@ def investigate_user(user_id: str) -> dict:
         return run_local_investigation(user_id)
 
 if __name__ == "__main__":
+    from tools import resolve_target_user_id
     parser = argparse.ArgumentParser(description="AI Security Investigation Agent")
-    parser.add_argument("--user", type=str, default="EMP11218", help="Target User ID to investigate")
+    parser.add_argument("--user", type=str, default=None, help="Target User ID to investigate (defaults to highest risk user)")
     args = parser.parse_args()
 
+    target_user = args.user or resolve_target_user_id("")
     print(f"\n==================================================")
     print(f"  AI SECURITY INVESTIGATION AGENT")
-    print(f"  Target User: {args.user}")
+    print(f"  Target User: {target_user}")
     print(f"==================================================\n")
 
-    result = investigate_user(args.user)
+    result = investigate_user(target_user)
     print(json.dumps(result, indent=2))

@@ -55,6 +55,7 @@ Datathon/
 │
 ├── README.md
 ├── requirements.txt
+├── .env.example
 ├── .gitignore
 ├── run_pipeline.py
 │
@@ -97,8 +98,7 @@ Datathon/
 │   └── analytics/
 │
 ├── backend/
-│   ├── main.py
-│   └── requirements.txt
+│   └── main.py
 │
 ├── dashboard/
 │   ├── package.json
@@ -106,11 +106,8 @@ Datathon/
 │
 ├── agent/
 │   ├── agent.py
-│   ├── chat_analyst.py
 │   ├── investigator.py
-│   ├── tools.py
-│   ├── test_agent.py
-│   └── test_chat_demo.py
+│   └── tools.py
 │
 └── docs/
     └── data_dictionary.md
@@ -576,7 +573,7 @@ python -m venv .venv
 Windows PowerShell:
 
 ```powershell
-.\.venv\Scripts\pip install -r backend\requirements.txt
+.\.venv\Scripts\pip install -r requirements.txt
 .\.venv\Scripts\python -m uvicorn backend.main:app --reload --port 8000
 ```
 
@@ -629,23 +626,39 @@ The important guardrail is that the agent should not turn a risk score into a cl
 
 ### Run the AI Analyst directly
 
-Conduct a full security investigation for a specific user:
+Conduct a full security investigation directly from the cleaned telemetry:
 
 ```bash
+# Investigates a specific user
 python agent/agent.py --user EMP11218
+
+# Or investigate the highest-risk user dynamically from the queue
+python agent/agent.py
 ```
 
-Run the interactive conversational analyst in the terminal:
+The investigation engine outputs a structured JSON report matching the `InvestigationReport` schema, grounded in the canonical CSV files.
+
+### API Key & Engine Modes
+
+The agent operates in dual mode:
+- **Local Engine (Default — Zero Configuration)**: If no API key is present, the agent uses the local deterministic investigation engine. It directly queries the cleaned CSV datasets, calculates risk factors, and correlates threats 100% offline without external network dependencies.
+- **Cloud GenAI Engine (Optional)**: If `GEMINI_API_KEY` is provided, the agent connects to Google GenAI (`gemini-2.5-flash`) using tool function-calling loops over the telemetry datasets.
+
+To provide an API key, copy `.env.example` to `.env`:
 
 ```bash
-python agent/chat_analyst.py
+cp .env.example .env
+# Edit .env and set: GEMINI_API_KEY=your_key_here
 ```
 
-Run the agent verification suites:
+Or set the environment variable in your terminal:
 
-```bash
-python agent/test_agent.py
-python agent/test_chat_demo.py
+```powershell
+# Windows PowerShell
+$env:GEMINI_API_KEY="your_api_key_here"
+
+# Linux / macOS
+export GEMINI_API_KEY="your_api_key_here"
 ```
 
 ---

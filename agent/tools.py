@@ -32,9 +32,17 @@ def resolve_target_user_id(query_or_id: str) -> str:
     """
     raw = str(query_or_id).strip()
     if not raw:
-        return "EMP11218"
+        risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
+        if not risk_df.empty and "user_id" in risk_df.columns:
+            return str(risk_df.sort_values(by="risk_score", ascending=False).iloc[0]["user_id"]).upper()
+        return ""
     
+    import re
     clean = raw.upper()
+    # Check if string contains explicit EMP or USR pattern
+    emp_match = re.search(r'\b(EMP\d{4,6}|USR-\d{4})\b', raw, re.IGNORECASE)
+    if emp_match:
+        return emp_match.group(1).upper()
 
     # Direct match in Risk Scores
     risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
@@ -61,13 +69,15 @@ def resolve_target_user_id(query_or_id: str) -> str:
             if not uname_matches.empty:
                 return str(uname_matches.iloc[0]["user_id"]).upper()
         
-        # Partial name match (e.g. "Karan" in "Karan Goda")
-        if "full_name" in id_df.columns and len(raw_lower) >= 3:
-            p_matches = id_df[id_df["full_name"].astype(str).str.lower().str.contains(raw_lower, regex=False)]
-            if not p_matches.empty:
-                return str(p_matches.iloc[0]["user_id"]).upper()
+        # Word-level name match (e.g. "Karan" in "Karan Goda")
+        if "full_name" in id_df.columns:
+            for word in raw_lower.split():
+                if len(word) >= 3:
+                    p_matches = id_df[id_df["full_name"].astype(str).str.lower().str.contains(r'\b' + re.escape(word) + r'\b', regex=True)]
+                    if not p_matches.empty:
+                        return str(p_matches.iloc[0]["user_id"]).upper()
 
-    return clean
+    return ""
 
 def get_identity_context(user_id: str) -> dict:
     """
