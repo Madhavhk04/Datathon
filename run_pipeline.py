@@ -21,6 +21,12 @@ import runpy
 import sys
 from pathlib import Path
 
+# Ensure UTF-8 output encoding across Windows consoles
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 ROOT = Path(__file__).resolve().parent
 
