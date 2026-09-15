@@ -1,97 +1,61 @@
 # AgentIQ Datathon — Zero-Trust Telemetry & Insider Threat Detection
 
-A cybersecurity analytics pipeline for detecting suspicious user activity and insider-threat signals across **IAM audit logs, endpoint alerts, firewall telemetry, and identity/asset records**.
+This project brings together four different security telemetry sources and turns them into something an analyst can actually work with.
 
-The project follows a production-oriented approach: raw telemetry is preserved, datasets are cleaned and validated independently, relationships are measured before joining, and risk/threat analytics are generated from trusted signals.
+The main idea was simple: **clean the data without hiding its problems, understand which relationships are trustworthy, then use the reliable signals to find users and activity that deserve investigation.**
 
----
-
-## Problem Statement
-
-Modern enterprise security environments generate telemetry across multiple systems. Individually, these sources provide only partial visibility into user and device activity.
-
-This project builds a unified analytical layer across:
+The pipeline works with:
 
 - Identity & Asset Master
 - IAM Audit Trail
 - Endpoint Alerts
 - Firewall Logs
 
-The objective is to identify users and activities that require security investigation while explicitly accounting for:
-
-- Missing and malformed telemetry
-- Duplicate records
-- Inconsistent identifiers
-- Ambiguous identity relationships
-- Weak cross-source relationships
-- Temporal relationships between security events
-
-The resulting system produces:
-
-- User-level risk scores
-- Threat detections
-- Cross-signal corroboration
-- A prioritized investigation queue
-- An executive/analyst security dashboard
+It produces user-level risk scores, concrete threat detections, a prioritized investigation queue, and a local SOC-style dashboard with an analyst/agent layer.
 
 ---
 
-# Architecture
+## What we built
+
+The project is split into a few clear stages:
 
 ```text
-                         ┌─────────────────────┐
-                         │     Raw Telemetry   │
-                         └──────────┬──────────┘
-                                    │
-              ┌─────────────────────┼─────────────────────┐
-              │                     │                     │
-              ▼                     ▼                     ▼
-       Identity Master         IAM Audit Trail      Endpoint Alerts
-              │                     │                     │
-              │                     │                     │
-              └──────────────┬──────┴──────────────┬──────┘
-                             │                     │
-                             ▼                     ▼
-                    Cleaning & Validation    Cleaning & Validation
-                             │                     │
-                             └──────────┬──────────┘
-                                        │
-                              ┌─────────▼─────────┐
-                              │ Relationship      │
-                              │ Validation        │
-                              │                   │
-                              │ Identity ↔ IAM    │
-                              │ Identity ↔ E.P.   │
-                              │ Identity ↔ FW     │
-                              └─────────┬─────────┘
-                                        │
-                         ┌──────────────┴──────────────┐
-                         │                             │
-                         ▼                             ▼
-                  Risk Analytics                Threat Detection
-                         │                             │
-                         └──────────────┬──────────────┘
-                                        │
-                                        ▼
-                              Corroboration Layer
-                                        │
-                                        ▼
-                              Investigation Queue
-                                        │
-                                        ▼
-                                  Dashboard
+Raw Telemetry
+     │
+     ▼
+Cleaning & Standardization
+     │
+     ▼
+Data Quality + Relationship Validation
+     │
+     ├───────────────┐
+     ▼               ▼
+Risk Analytics   Threat Detection
+     │               │
+     └───────┬───────┘
+             ▼
+      Corroboration
+             │
+             ▼
+    Investigation Queue
+             │
+       ┌─────┴─────┐
+       ▼           ▼
+   Dashboard    AI Analyst
 ```
+
+A key design decision is that the **Identity & Asset Master is the canonical identity/asset anchor**. We measure relationships before using them instead of assuming that every shared identifier means two records belong together.
 
 ---
 
-# Repository Structure
+## Repository structure
 
 ```text
 Datathon/
 │
 ├── README.md
-├── requirements.txt
 ├── .gitignore
+├── run_pipeline.py
 │
 ├── data/
 │   ├── raw/
@@ -119,163 +83,161 @@ Datathon/
 │   │   └── firewall.py
 │   │
 │   ├── validation/
-│   │   ├── schema.py
-│   │   ├── quality.py
 │   │   └── relationships.py
 │   │
-│   ├── analytics/
-│   │   ├── risk.py
-│   │   ├── threat.py
-│   │   └── corroboration.py
-│   │
-│   └── utils/
-│       ├── ids.py
-│       ├── timestamps.py
-│       └── logging.py
-│
-├── pipeline/
-│   └── run_pipeline.py
+│   └── analytics/
+│       ├── risk.py
+│       ├── threat.py
+│       └── corroboration.py
 │
 ├── reports/
 │   ├── data_quality/
 │   ├── join_quality/
 │   └── analytics/
 │
+├── backend/
+│   ├── main.py
+│   └── requirements.txt
+│
 ├── dashboard/
+│   ├── package.json
+│   └── src/
 │
 ├── agent/
+│   ├── agent.py
+│   ├── chat_analyst.py
+│   ├── investigator.py
+│   └── tools.py
 │
 └── docs/
-    ├── data_dictionary.md
-    ├── architecture.md
-    └── metric_definitions.md
+    └── data_dictionary.md
 ```
 
 ---
 
-# 1. Data Sources
+# 1. Data sources
 
-The project works with four telemetry sources.
+| Dataset | What it represents | Main role in the project |
+|---|---|---|
+| Identity & Asset Master | Users, departments, hosts and devices | Canonical identity/asset reference |
+| IAM Audit Trail | Authentication and identity events | Authentication and IAM risk signals |
+| Endpoint Alerts | Endpoint security alerts | Malware, credential, lateral movement and endpoint signals |
+| Firewall Logs | Network activity | Network/threat telemetry and hostname relationships |
 
-| Dataset | Purpose |
-|---|---|
-| Identity & Asset Master | Canonical user, device and asset relationships |
-| IAM Audit Trail | Authentication and identity activity |
-| Endpoint Alerts | Endpoint security events and malware-related activity |
-| Firewall Logs | Network activity and threat telemetry |
-
-The **Identity & Asset Master** is treated as the canonical identity/asset anchor for downstream relationships.
+The raw files are kept separate from the processed files. The cleaning scripts read the raw data and write cleaned analytical versions rather than overwriting the originals.
 
 ---
 
-# 2. Data Rescue & Cleaning
+# 2. Data rescue and cleaning
 
-Raw datasets are preserved and are never overwritten.
+We did not want cleaning to mean simply deleting every row containing a null value. Security telemetry is messy by nature, and a missing value can itself be useful information.
 
-Each source has an independent cleaning module under:
+The general approach was:
 
-```text
-src/cleaning/
-```
+1. Remove exact duplicate records where the duplicate is clearly the same record.
+2. Normalize identifiers and categorical values.
+3. Parse timestamps into a consistent datetime representation.
+4. Validate IP addresses, ports, hashes and other structured fields.
+5. Keep missing information as missing instead of inventing a value.
+6. Add quality flags where a specific condition needs to be visible downstream.
+7. Measure relationships between datasets before using them for analytics.
 
-The objective is to convert inconsistent raw telemetry into canonical analytical datasets while preserving uncertainty through explicit quality flags.
+### Overall row counts
+
+| Dataset | Raw rows | Exact duplicates removed | Clean rows |
+|---|---:|---:|---:|
+| Identity & Asset Master | 3,090 | 90 | 3,000 |
+| IAM Audit Trail | 20,500 | 500 | 20,000 |
+| Endpoint Alerts | 8,240 | 240 | 8,000 |
+| Firewall Logs | 30,600 | 600 | 30,000 |
+| **Total** | **62,430** | **1,430** | **61,000** |
+
+The quality reports under `reports/data_quality/` provide the detailed cleaning evidence.
 
 ---
 
 ## Identity & Asset Master
 
-The identity pipeline performs:
+The identity data is used as the reference point for user, host and device relationships.
+
+Cleaning includes:
 
 - Exact duplicate removal
-- `user_id` normalization
+- User ID normalization
 - Username normalization
-- Department normalization
-- Location normalization
-- Status normalization
-- Date parsing
+- Department, location and status normalization
+- Hire/termination date parsing
 - Hostname normalization
-- Device identifier normalization
-- Device ownership conflict detection
+- Device ID normalization
+- Detection of conflicting device ownership
 
-### Dataset Size
+Result:
 
 ```text
-Raw records              : 3,090
-Exact duplicate records  : 90
+Raw records             : 3,090
+Exact duplicates removed: 90
 Clean records            : 3,000
 ```
 
-The final dataset contains explicit indicators for conflicting device assignments.
-
-The Identity & Asset Master is used as the canonical reference for connecting users, hosts and devices to telemetry.
+Conflicting device assignments are not silently resolved. They are retained as a quality signal so that downstream analysis knows the relationship is ambiguous.
 
 ---
 
 ## IAM Audit Trail
 
-The IAM pipeline performs:
+The IAM pipeline standardizes the fields needed for authentication and identity analysis.
+
+Cleaning includes:
 
 - Exact duplicate removal
 - Event ID validation
-- User ID normalization
-- Username normalization
+- User and username normalization
 - Timestamp parsing
 - Authentication method normalization
 - IP validation
-- Hostname normalization
-- Device ID normalization
+- Hostname and device ID normalization
 - Session ID normalization
 - MFA value normalization
-- Risk score normalization
-- Risk-level standardization
-- Failure reason preservation
+- Risk score and risk-level handling
+- Preservation of failure reasons
 
-### Dataset Size
+Result:
 
 ```text
-Raw records              : 20,500
-Exact duplicate records  : 500
+Raw records             : 20,500
+Exact duplicates removed: 500
 Clean records            : 20,000
 ```
 
-Duplicate event IDs are checked after deduplication to prevent duplicate security events from propagating into downstream analytics.
+Duplicate event IDs are also checked after deduplication so duplicate security events do not quietly enter the analytics layer.
 
 ---
 
 ## Endpoint Alerts
 
-The endpoint pipeline performs:
+Endpoint telemetry contains several different kinds of problems, so we kept a distinction between missing information and genuinely invalid information.
+
+Cleaning includes:
 
 - Exact duplicate removal
 - Alert ID validation
-- Timestamp parsing
-- Hostname normalization
-- User identifier validation
-- Severity normalization
-- Status normalization
+- Detected/resolved timestamp parsing
+- Hostname and user ID validation
+- Severity and status normalization
 - Device criticality normalization
 - SHA-256 validation
 - Resolution consistency checks
-- Data-quality flag generation
+- Explicit data-quality flags
 
-### Dataset Size
+Result:
 
 ```text
-Raw records              : 8,240
-Exact duplicate records  : 240
+Raw records             : 8,240
+Exact duplicates removed: 240
 Clean records            : 8,000
 ```
 
-The pipeline distinguishes between:
-
-- Invalid telemetry
-- Missing telemetry
-- Operational state
-- Actual data-quality defects
-
-For example, a missing SHA-256 value is retained as a telemetry completeness issue rather than automatically being treated as an invalid record.
-
-### Endpoint Quality Findings
+Current quality findings include:
 
 ```text
 Missing hostnames       : 481
@@ -285,13 +247,15 @@ Invalid SHA-256         : 799
 Rows requiring review   : 5,168
 ```
 
-Missing SHA-256 values are reported separately from invalid hashes because missing telemetry and malformed telemetry represent different quality conditions.
+A missing SHA-256 is not automatically treated as an invalid hash. The absence of telemetry and malformed telemetry are two different conditions, so the pipeline keeps them separate.
 
 ---
 
 ## Firewall Logs
 
-The firewall pipeline performs:
+Firewall records contain mixed timestamp formats and inconsistent network fields.
+
+Cleaning includes:
 
 - Exact duplicate removal
 - Timestamp parsing across supported formats
@@ -303,65 +267,46 @@ The firewall pipeline performs:
 - Byte-field validation
 - Session ID normalization
 - Threat flag normalization
-- Geographic field preservation
+- Preservation of geographic fields
 
-### Dataset Size
+Result:
 
 ```text
-Raw records              : 30,600
-Exact duplicate records  : 600
+Raw records             : 30,600
+Exact duplicates removed: 600
 Clean records            : 30,000
 ```
 
-Hostname normalization includes case normalization and conversion of inconsistent underscore usage.
+A separate `hostname_join_key` is used when comparing hostnames with the identity data. This allows the `.corp.local` suffix to be handled consistently without changing the original analytical hostname.
 
-A separate `hostname_join_key` is used for identity relationships so that the `.corp.local` suffix does not prevent otherwise valid matches.
-
-This increased the firewall-to-identity hostname match rate to:
-
-```text
-94.41%
-```
-
-No user identity is inferred from an unmatched hostname.
+The resulting firewall-to-identity hostname match rate is **94.41%**.
 
 ---
 
-# 3. Data Quality
+# 3. Missing values and quality flags
 
-Data quality is treated as a first-class part of the pipeline.
+Missing values are generally retained in the cleaned data. We did not use blanket imputation just to make the tables look complete.
 
-The system explicitly tracks:
+Where it helps explain a specific problem, the cleaned dataset contains an additional flag. Endpoint alerts are the clearest example, with fields such as:
 
-- Missing values
-- Invalid identifiers
-- Invalid IP addresses
-- Invalid ports
-- Invalid timestamps
-- Invalid hashes
-- Duplicate records
-- Conflicting device ownership
-- Impossible timestamp relationships
-- Unresolved endpoint alerts
-- Ambiguous relationships
-- Join coverage
-- Cross-source consistency
+- `missing_hostname_flag`
+- `missing_user_id_flag`
+- `invalid_detected_timestamp_flag`
+- `impossible_resolution_flag`
+- `invalid_sha256_flag`
+- `sha256_missing_flag`
 
-Missing values are **not blindly imputed**.
+The distinction is important: a flag does not replace the original field. It records what happened to that field or record while the available value remains available for analysis.
 
-When information is unavailable, the pipeline preserves the missingness and records the appropriate quality flag.
-
-This prevents artificial certainty from entering the security analytics layer.
+For invalid structured values, the analytical field may be set to null while the corresponding validation flag records why it was rejected. This avoids passing malformed values into downstream joins or calculations.
 
 ---
 
-# 4. Relationship Validation
+# 4. Relationship validation
 
-Datasets are **not blindly joined**.
+One of the more important parts of the project was deciding **which relationships we could actually trust**.
 
-Before using a relationship for analytics, its coverage and consistency are measured.
-
-The primary architecture is:
+We use the Identity & Asset Master as the central anchor:
 
 ```text
                          Identity
@@ -372,177 +317,103 @@ The primary architecture is:
             IAM          Endpoint       Firewall
 ```
 
-This makes the Identity & Asset Master the canonical identity/asset anchor.
+The current relationship-quality results are:
 
----
-
-## Relationship Quality
-
-| Relationship | Coverage / Consistency | Assessment |
+| Relationship | Result | Assessment |
 |---|---:|---|
-| IAM → Identity by `user_id` | 92.49% | Strong |
+| IAM → Identity by `user_id` | 100.00% | Strong |
 | IAM → Identity by hostname | 94.60% | Strong |
 | IAM → Identity by `device_id` | 82.25% | Moderate |
-| IAM user + hostname consistency | 88.14% | Moderate |
-| Endpoint → Identity by `user_id` | 92.16% | Strong |
+| IAM user + hostname consistency | 94.60% | Strong |
+| Endpoint → Identity by `user_id` | 100.00% | Strong |
 | Endpoint → Identity by hostname | 93.59% | Strong |
-| Endpoint user + hostname consistency | 79.37% | Moderate |
+| Endpoint user + hostname consistency | 85.68% | Moderate |
 | Firewall → Identity by hostname | 94.41% | Strong |
 
-These measurements are retained in relationship-quality reports rather than hidden during preprocessing.
+The full relationship evidence is available under `reports/join_quality/`.
 
 ---
 
-# 5. IAM ↔ Firewall Session Reconciliation
+# 5. IAM ↔ Firewall session reconciliation
 
-The presence of a shared `session_id` does not automatically mean that IAM and firewall records describe the same activity.
+We specifically checked whether a shared `session_id` was reliable enough to join IAM and firewall activity directly.
 
-A dedicated reconciliation analysis was therefore performed.
+It was not.
 
-### Session Counts
-
-```text
-IAM unique sessions       : 11,452
-Firewall unique sessions  : 25,133
-Shared sessions           : 303
-```
-
-For the 303 shared sessions:
+There were **303 shared sessions**. When we reconciled the available hostname and timestamp evidence:
 
 ```text
-Hostname-consistent       : 0
-Hostname-inconsistent     : 248
-No hostname evidence      : 55
-Within ±60 minutes        : 0
+Hostname-consistent : 0
+Hostname-inconsistent: 248
+No hostname evidence : 55
+Within ±60 minutes   : 0
 ```
 
-The timestamp evidence also showed large temporal differences between shared-session records.
+The IAM ↔ Firewall session relationship was therefore **rejected for analytical joining**.
 
-### Decision
+This is intentional. A shared identifier by itself is not enough evidence to claim that two security events describe the same activity. Using a weak join here would have created false correlations in the threat analytics.
 
-```text
-IAM ↔ Firewall session relationship
-             ↓
-          REJECTED
-```
-
-The session relationship is therefore **not used as an analytical join**.
-
-This is an intentional data-quality decision.
-
-Rather than forcing a weak relationship into the model, the system relies on the stronger:
-
-```text
-Identity ↔ IAM
-Identity ↔ Endpoint
-Identity ↔ Firewall
-```
-
-relationships.
-
-This reduces the risk of false correlations contaminating downstream threat analytics.
+Instead, the production model uses the stronger identity-centred relationships described above.
 
 ---
 
-# 6. Risk Analytics
+# 6. User risk scoring
 
-The risk engine produces a user-level score from:
+The risk engine gives each user a score from **0 to 100**. It is meant for investigation prioritization, not as a probability that an account has been compromised.
 
-```text
-0–100
-```
+The score combines several dimensions:
 
-The score is designed for **security triage and prioritization**, not as a probability of compromise.
-
-The model uses multiple dimensions instead of allowing a single noisy signal to dominate the result.
-
----
-
-## Risk Dimensions
-
-| Dimension | Maximum Contribution |
+| Dimension | Maximum contribution |
 |---|---:|
 | Authentication | 20 |
-| IAM Risk | 20 |
-| Endpoint Severity | 20 |
-| Threat Behaviour | 30 |
+| IAM risk | 20 |
+| Endpoint severity | 20 |
+| Threat behaviour | 30 |
 | Context | 15 |
-| Cross-Signal Bonus | 10 |
+| Cross-signal bonus | 10 |
 
-The final score is capped at:
+The final score is capped at 100.
 
-```text
-100
-```
-
----
-
-## Risk Bands
+### Risk bands
 
 ```text
-0–39      Low
-40–59     Medium
-60–79     High
-80–100    Critical
+0–39    Low
+40–59   Medium
+60–79   High
+80–100  Critical
 ```
 
----
+### Current production distribution
 
-## Current Risk Distribution
-
-| Risk Band | Users | Percentage |
+| Risk band | Users | Percentage |
 |---|---:|---:|
-| Low | 1,591 | 53.03% |
-| Medium | 1,224 | 40.80% |
-| High | 174 | 5.80% |
+| Low | 1,474 | 49.13% |
+| Medium | 1,329 | 44.30% |
+| High | 186 | 6.20% |
 | Critical | 11 | 0.37% |
 | **Total** | **3,000** | **100%** |
 
-Therefore:
+That gives us **197 High/Critical users** for closer attention.
 
-```text
-High + Critical users = 185
-Percentage             = 6.17%
-```
-
-This narrows the population requiring immediate attention compared with investigating every user or every telemetry event equally.
+The score is a triage mechanism. A high score should lead an analyst to the underlying evidence rather than being treated as proof of malicious behaviour.
 
 ---
 
-# 7. Threat Detection
+# 7. Threat detection
 
-The threat detection layer identifies concrete security scenarios.
+Risk scoring tells us which users look concerning overall. Threat detection answers a different question: **what specific behaviour caused concern?**
 
-Unlike the risk model, threat detections are event-oriented and provide an explanation for why a user or activity was flagged.
+The production detector uses temporal correlation for scenarios where unrelated events could otherwise be incorrectly combined.
 
-The production detector uses temporal correlation where appropriate to reduce false positives from unrelated events occurring far apart in time.
+### Post-Termination Activity
 
----
+Flags IAM or endpoint activity associated with a user after the recorded termination date.
 
-## Threat Scenario 1 — Post-Termination Activity
+This is an investigation signal, not automatic proof of malicious activity. Possible explanations include delayed telemetry, stale mappings, service accounts, shared credentials or asset reassignment.
 
-Detects IAM or endpoint activity occurring after the recorded termination date of a user.
+### Potential Credential Compromise
 
-The detector uses the actual telemetry timestamps and the Identity & Asset Master termination date.
-
-A post-termination event is treated as a security investigation signal.
-
-It does **not** automatically imply malicious activity.
-
-Possible explanations include:
-
-- Stale identity mappings
-- Service accounts
-- Delayed telemetry
-- Shared credentials
-- Asset reassignment
-- Logging inconsistencies
-
----
-
-## Threat Scenario 2 — Potential Credential Compromise
-
-The production rule requires multiple signals to occur within a common 24-hour window:
+The production rule requires all of the following to occur within a common 24-hour window:
 
 ```text
 ≥ 3 failed authentications
@@ -552,68 +423,32 @@ The production rule requires multiple signals to occur within a common 24-hour w
 ≥ 1 credential-related endpoint alert
 ```
 
-The common-window requirement prevents events that merely occur somewhere within the dataset lifetime from being incorrectly interpreted as one coordinated attack.
+The current production dataset has **0 detections** for this scenario. That is expected from the conservative common-window rule.
+
+### Malware + Lateral Movement
+
+Looks for malware activity and lateral-movement activity within a 24-hour window. Same-host evidence receives stronger confidence than same-user evidence across different hosts.
+
+### Suspicious Administrative Activity
+
+Combines suspicious administrative IAM behaviour with relevant endpoint activity, again giving more weight to same-host activity within the 24-hour window.
+
+### Identity / Hostname Mismatch
+
+Flags repeated telemetry relationships where the observed hostname does not agree with the canonical identity/asset mapping.
 
 ---
 
-## Threat Scenario 3 — Malware + Lateral Movement
+# 8. Threat results
 
-The detector looks for:
-
-```text
-Malware activity
-        +
-Lateral movement activity
-```
-
-within a 24-hour temporal window.
-
-Same-host correlation receives stronger confidence than same-user correlation across different hosts.
-
-This creates a hierarchy of evidence rather than treating all relationships equally.
-
----
-
-## Threat Scenario 4 — Suspicious Administrative Activity
-
-The detector combines suspicious administrative IAM behaviour with relevant endpoint activity.
-
-The production rule prioritizes temporal correlation:
-
-```text
-Same host + within 24 hours
-        ↓
-Higher confidence
-
-Same user + within 24 hours
-        ↓
-Moderate supporting evidence
-```
-
-Lifetime co-occurrence without temporal support is not treated as a confirmed scenario.
-
----
-
-## Threat Scenario 5 — Identity / Hostname Mismatch
-
-Detects telemetry where the observed user-host relationship conflicts with the canonical Identity & Asset Master relationship.
-
-This is treated as an investigation signal rather than automatic proof of compromise.
-
----
-
-# 8. Threat Detection Results
-
-Current production output:
+Current production output contains:
 
 ```text
 Total detections : 742
 Affected users   : 693
 ```
 
-### Detection Breakdown
-
-| Threat Type | Detections |
+| Threat type | Detections |
 |---|---:|
 | Post-Termination Activity | 367 |
 | Identity / Hostname Mismatch | 216 |
@@ -622,7 +457,7 @@ Affected users   : 693
 | Potential Credential Compromise | 0 |
 | **Total** | **742** |
 
-### Severity Distribution
+### Severity
 
 | Severity | Detections |
 |---|---:|
@@ -631,40 +466,23 @@ Affected users   : 693
 | Medium | 216 |
 | **Total** | **742** |
 
-The zero result for Potential Credential Compromise is intentional.
-
-The detector is deliberately conservative and requires all required signals to occur within the same common temporal window rather than relying on lifetime event intersections.
-
 ---
 
-# 9. Corroboration Layer
+# 9. Corroboration and investigation queue
 
-Risk scoring and threat detection answer different questions.
+We did not want the risk score and threat detections to live as two unrelated outputs.
 
-### Risk score
+The corroboration layer combines:
 
-> How much overall security concern is associated with this user?
-
-### Threat detection
-
-> What specific suspicious behaviour was observed?
-
-The corroboration layer combines both.
-
-For each user, it considers:
-
-- Risk score
+- User risk score
 - Threat detections
 - Number of distinct threat types
-- Critical detection count
+- Critical/high/medium detection counts
 - Detection confidence
 - Identity context
+- Device conflict information
 
-This produces a prioritized **investigation queue**.
-
----
-
-# 10. Investigation Queue
+This creates the final investigation queue.
 
 Current queue:
 
@@ -672,9 +490,7 @@ Current queue:
 693 users
 ```
 
-### Priority Distribution
-
-| Priority | Users |
+| Investigation priority | Users |
 |---|---:|
 | Critical | 7 |
 | High | 52 |
@@ -682,465 +498,191 @@ Current queue:
 | Low | 430 |
 | **Total** | **693** |
 
-The queue allows analysts to move from a large telemetry population to a focused set of users requiring investigation.
+The queue is intended to answer a practical SOC question: **who should an analyst look at first, and why?**
 
-The intended workflow is:
+---
+
+# 10. Reproducible pipeline
+
+The full data pipeline is orchestrated by `run_pipeline.py` at the repository root.
+
+It runs the stages in dependency order:
 
 ```text
-Enterprise
-    ↓
-Risk Population
-    ↓
-Threat Category
-    ↓
-Priority Queue
-    ↓
-Individual User
-    ↓
-Supporting Evidence
-```
-
----
-
-# 11. Example High-Risk Users
-
-The risk and corroboration layers surface users with combinations of multiple independent security signals.
-
-For example, one high-priority user can simultaneously exhibit:
-
-- Multiple failed authentications
-- MFA failures
-- High-risk IAM events
-- Malware detections
-- Credential-access activity
-- Lateral-movement signals
-- Critical endpoint alerts
-- Post-termination activity
-
-The system therefore does not depend on a single alert.
-
-It prioritizes **corroborated evidence across telemetry sources**.
-
----
-
-# 12. Analytical Caveats
-
-## Post-Termination Activity
-
-A post-termination event means:
-
-> Telemetry contains activity associated with the user's identity after the recorded termination date.
-
-It does not prove that:
-
-- The employee personally performed the activity
-- The credentials were used maliciously
-- The identity mapping is still valid
-
-The signal should therefore trigger investigation rather than automatic attribution.
-
----
-
-## Risk Score
-
-The risk score is a triage mechanism.
-
-It is not:
-
-- A probability of compromise
-- A formal incident severity classification
-- A replacement for analyst investigation
-
-The score is intended to help security teams decide where to look first.
-
----
-
-## Identity / Hostname Mismatch
-
-A mismatch indicates an inconsistency between telemetry and the canonical identity/asset relationship.
-
-Potential causes include:
-
-- Device reassignment
-- Shared devices
-- Stale mappings
-- Identity synchronization issues
-- Data-quality problems
-- Potential unauthorized activity
-
-Therefore, the detector should be interpreted as an investigation signal.
-
----
-
-## Rejected Session Relationship
-
-The IAM ↔ Firewall session relationship was rejected because shared session IDs lacked supporting hostname and temporal evidence.
-
-This decision is intentional.
-
-A weak relationship is more dangerous than an explicitly unresolved relationship because an incorrect join can create false attack narratives.
-
----
-
-# 13. Reproducibility
-
-Install the project dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the complete pipeline:
-
-```bash
-python pipeline/run_pipeline.py
-```
-
-The pipeline is structured into separate stages for:
-
-```text
-Cleaning
-    ↓
-Validation
-    ↓
-Relationship Analysis
-    ↓
-Risk Analytics
-    ↓
-Threat Detection
-    ↓
+Identity cleaning
+      ↓
+IAM cleaning
+      ↓
+Endpoint cleaning
+      ↓
+Firewall cleaning
+      ↓
+Relationship validation
+      ↓
+Risk analytics
+      ↓
+Threat detection
+      ↓
 Corroboration
 ```
 
-Individual modules can also be executed independently when debugging or developing a specific layer.
+The runner also checks that the expected production outputs were created.
 
----
+## Run the pipeline
 
-# 14. Output Files
+From the repository root, install the data-processing dependencies:
 
-## Processed Data
+```bash
+pip install pandas numpy openpyxl
+```
 
-Located under:
+Then run:
+
+```bash
+python run_pipeline.py
+```
+
+The raw input files expected by the pipeline are already under `data/raw/`.
+
+The generated outputs are written to:
 
 ```text
 data/processed/
-```
-
-Contains canonical cleaned datasets.
-
----
-
-## Analytics
-
-Located under:
-
-```text
 data/analytics/
-```
-
-Contains:
-
-```text
-user_risk_scores.csv
-threat_detections.csv
-investigation_queue.csv
-```
-
----
-
-## Data Quality Reports
-
-Located under:
-
-```text
 reports/data_quality/
-```
-
-These reports provide evidence for:
-
-- Duplicate removal
-- Missing values
-- Invalid values
-- Validation results
-- Cleaning decisions
-
----
-
-## Relationship Reports
-
-Located under:
-
-```text
 reports/join_quality/
-```
-
-These include:
-
-- Relationship quality
-- Join coverage
-- Ambiguous hostnames
-- Ambiguous devices
-- Session reconciliation
-- Shared-session evidence
-
----
-
-## Analytics Reports
-
-Located under:
-
-```text
 reports/analytics/
 ```
 
-These include:
-
-- Risk band distribution
-- Top risk users
-- Investigation queue summary
-
 ---
 
-# 15. Data Lineage
+# 11. Dashboard
 
-The project maintains a clear separation between raw, processed and analytical data.
+The project includes a local SOC Command Center built with React/Vite and a small FastAPI backend.
 
-```text
-data/raw/
-    │
-    │  Source telemetry
-    ▼
-src/cleaning/
-    │
-    │  Canonicalization
-    ▼
-data/processed/
-    │
-    │
-    ├───────────────► src/validation/
-    │                       │
-    │                       ▼
-    │                reports/join_quality/
-    │
-    ▼
-src/analytics/
-    │
-    ├──────────────► Risk Analytics
-    │
-    ├──────────────► Threat Detection
-    │
-    └──────────────► Corroboration
-                            │
-                            ▼
-                     data/analytics/
+The dashboard is read-only with respect to the committed analytics data. It reads the investigation queue, threat detections and risk scores produced by the pipeline.
+
+### Start the backend
+
+From the repository root:
+
+```bash
+python -m venv .venv
 ```
 
-This separation ensures that analytical transformations can be traced back to cleaned source data.
+Windows PowerShell:
 
----
-
-# 16. Key Design Principles
-
-### 1. Preserve Raw Data
-
-Raw telemetry is never overwritten.
-
-### 2. Clean Before Joining
-
-Every source is cleaned independently before relationship analysis.
-
-### 3. Measure Before Joining
-
-Relationships are quantified before being trusted.
-
-### 4. Do Not Invent Identity
-
-Unmatched telemetry is not assigned to users using unsupported assumptions.
-
-### 5. Preserve Uncertainty
-
-Missing and ambiguous information is explicitly represented rather than silently filled.
-
-### 6. Prefer Temporal Evidence
-
-Security events occurring close together in time provide stronger evidence than lifetime co-occurrence.
-
-### 7. Separate Data Quality From Security Risk
-
-A malformed or missing field is not automatically treated as malicious behaviour.
-
-### 8. Use Corroboration
-
-Independent security signals are combined to improve investigation prioritization.
-
-### 9. Reject Weak Relationships
-
-A relationship that cannot be supported by the available evidence should not be forced into the analytical model.
-
-### 10. Optimize for Analyst Action
-
-The final product is not simply a collection of alerts.
-
-It is a prioritized investigation workflow.
-
----
-
-# 17. Dashboard
-
-The dashboard provides an executive and analyst-oriented view of the resulting security intelligence.
-
-The dashboard is designed around the following flow:
-
-```text
-Security Overview
-        ↓
-Risk Distribution
-        ↓
-Threat Landscape
-        ↓
-Investigation Queue
-        ↓
-User Investigation
-        ↓
-Evidence
+```powershell
+.\.venv\Scripts\pip install -r backend\requirements.txt
+.\.venv\Scripts\python -m uvicorn backend.main:app --reload --port 8000
 ```
 
-Key dashboard capabilities include:
+### Start the frontend
 
-- Overall security posture
-- Risk-band distribution
-- High/Critical user identification
-- Threat category analysis
-- Investigation priority
-- Cross-signal corroboration
-- User-level evidence
-- Data-quality indicators
+In a second terminal:
 
-The goal is to allow an analyst to move from a high-level security overview to the evidence behind an individual investigation.
-
----
-
-# 18. Future / Bonus Layer
-
-The repository also provides a foundation for an agentic security investigation layer.
-
-The potential agent workflow is:
-
-```text
-Analyst Question
-       ↓
-Investigation Agent
-       ↓
-Risk + Threat + Identity Context
-       ↓
-Relevant Evidence
-       ↓
-Investigation Summary
-       ↓
-Recommended Next Action
+```bash
+cd dashboard
+npm install
+npm run dev
 ```
 
-Potential use cases include:
-
-- "Why is this user high risk?"
-- "Show the evidence behind this alert."
-- "What threat signals are associated with this user?"
-- "Which users require immediate investigation?"
-- "Are there other users showing similar behaviour?"
-
-The agentic layer should remain grounded in the validated analytical outputs rather than generating unsupported conclusions.
-
----
-
-# 19. Technology Stack
-
-- Python
-- Pandas
-- NumPy
-- Jupyter / Python analysis
-- CSV
-- JSON
-- Excel
-- Git
-- GitHub
-- Rule-based temporal correlation
-- Data-quality validation
-- Dashboard layer
-
----
-
-# 20. Project Outcome
-
-The project transforms heterogeneous cybersecurity telemetry into an evidence-backed security investigation workflow.
+Then open the local Vite address shown in the terminal, normally:
 
 ```text
-┌──────────────────────┐
-│     Raw Telemetry    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│    Data Rescue       │
-│    & Cleaning        │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Canonical Clean Data │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Relationship         │
-│ Validation            │
-└──────────┬───────────┘
-           │
-           ├───────────────┐
-           ▼               ▼
-┌─────────────────┐ ┌─────────────────┐
-│  Risk Analytics │ │ Threat Detection│
-└────────┬────────┘ └────────┬────────┘
-         │                   │
-         └─────────┬─────────┘
-                   ▼
-        ┌─────────────────────┐
-        │    Corroboration     │
-        └──────────┬──────────┘
-                   │
-                   ▼
-        ┌─────────────────────┐
-        │ Investigation Queue │
-        └──────────┬──────────┘
-                   │
-                   ▼
-        ┌─────────────────────┐
-        │      Dashboard      │
-        └─────────────────────┘
+http://localhost:5173
 ```
 
-The key objective is not to generate more alerts.
+The backend exposes:
 
-It is to:
-
-**reduce noise, preserve uncertainty, validate relationships, correlate meaningful security signals, and prioritize the users and behaviours most deserving of analyst attention.**
-
----
-
-# Team
-
-Developed for the **TransOrg AgentIQ Datathon — Cybersecurity Track**.
-
-### Team Members
-
-- Adwaid Krishna K
-- Madhav Hemakumar
-- Ananjay Pampalli
-- Aadhil Ajas Kareem
+```text
+GET  /api/health
+GET  /api/snapshot
+POST /api/analyst/query
+GET  /api/investigate/{user_id}
+```
 
 ---
 
-## Status
+# 12. AI analyst layer
 
-**Core data engineering, validation, risk analytics, threat detection, and corroboration layers completed.**
+The AI layer sits on top of the deterministic pipeline rather than replacing it.
 
-Dashboard and agentic investigation capabilities are being developed as the final presentation layer.
+The agent can use the committed risk, threat, identity, IAM, endpoint and firewall evidence to investigate a user and explain the reason for the priority.
+
+The intended flow is:
+
+```text
+Detect
+  ↓
+Corroborate
+  ↓
+Investigate
+  ↓
+Explain
+```
+
+The important guardrail is that the agent should not turn a risk score into a claim that a person is malicious. Its job is to bring the evidence together, build an understandable investigation view, and suggest reasonable next steps.
+
+---
+
+# 13. Why some relationships are rejected
+
+A recurring theme in this project is **not forcing the data to say more than it actually says**.
+
+For example, the IAM ↔ Firewall session analysis produced only 303 shared sessions and none had matching hostname evidence plus a timestamp within the chosen 60-minute window. Rather than inventing a fuzzy join, we rejected that relationship.
+
+The same principle is used with missing fields, conflicting device ownership and post-termination activity.
+
+This makes the final analytics a little more conservative, but it also makes the investigation results easier to defend.
+
+---
+
+# 14. Evidence and outputs
+
+Useful evidence produced by the project includes:
+
+```text
+reports/data_quality/
+    *_quality_report.csv
+    *_pipeline_summary.csv
+
+reports/join_quality/
+    relationship_quality_report.csv
+    session_relationship_report.csv
+    session_hostname_consistency_report.csv
+    shared_session_evidence.csv
+    ambiguous_devices.csv
+    ambiguous_hostnames.csv
+
+reports/analytics/
+    risk_band_distribution.csv
+    top_100_risk_users.csv
+    threat_type_summary.csv
+    threat_severity_summary.csv
+    investigation_queue_summary.csv
+```
+
+The cleaned datasets and analytics outputs are also committed under `data/processed/` and `data/analytics/` so the evaluator can inspect the results directly.
+
+---
+
+# 15. Data dictionary
+
+The column-level definitions for the cleaned datasets are in:
+
+```text
+docs/data_dictionary.md
+```
+
+The dictionary describes the analytical meaning of the columns, including the validation and quality flags introduced during cleaning.
+
+---
+
+# Final note
+
+The goal of the project was not to make the telemetry look perfect. The goal was to make it **usable without hiding uncertainty**.
+
+Where a relationship was strong, we used it. Where a value was missing, we kept that information. Where a relationship was ambiguous or unsupported, we reported it instead of guessing.
+
+That approach is what the downstream risk, threat and investigation layers are built on.
