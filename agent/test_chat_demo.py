@@ -7,22 +7,23 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from chat_analyst import process_chat_query
 
 demo_tests = [
-    ("1. Investigate USR-1001", "Investigate USR-1001", "USR-1001"),
-    ("2. Why is USR-1001 critical?", "Why is USR-1001 critical?", "USR-1001"),
-    ("3. Show the evidence.", "Show the evidence.", "USR-1001"),
-    ("4. What happened on the endpoint?", "What happened on the endpoint?", "USR-1001"),
-    ("5. How much network traffic occurred?", "How much network traffic occurred?", "USR-1001"),
-    ("6. What threats are active?", "What threats are active?", "USR-1001"),
-    ("7. Investigate USR-1002", "Investigate USR-1002", "USR-1002"),
-    ("8. Compare USR-1001 and USR-1002", "Compare USR-1001 and USR-1002", "USR-1001"),
-    ("9. Investigate USR-1004", "Investigate USR-1004", "USR-1004"),
-    ("10. Investigate USR-9999", "Investigate USR-9999", "USR-9999"),
-    ("11. Does network traffic alone prove exfiltration?", "Does network traffic alone prove exfiltration?", "USR-1001"),
-    ("12. What data sources did you use?", "What data sources did you use?", "USR-1001"),
+    ("1. Investigate EMP11218", "Investigate EMP11218", "EMP11218"),
+    ("2. Why is EMP11218 critical?", "Why is EMP11218 critical?", "EMP11218"),
+    ("3. Show the evidence.", "Show the evidence.", "EMP11218"),
+    ("4. What happened on the endpoint?", "What happened on the endpoint?", "EMP11218"),
+    ("5. How much network traffic occurred?", "How much network traffic occurred?", "EMP11218"),
+    ("6. What threats are active?", "What threats are active?", "EMP11218"),
+    ("7. Investigate EMP10296", "Investigate EMP10296", "EMP10296"),
+    ("8. Compare EMP11218 and EMP10296", "Compare EMP11218 and EMP10296", "EMP11218"),
+    ("9. Investigate EMP10002 (Low Risk)", "Investigate EMP10002", "EMP10002"),
+    ("10. Investigate EMP99999 (Not Found)", "Investigate EMP99999", "EMP99999"),
+    ("11. Does network traffic alone prove exfiltration?", "Does network traffic alone prove exfiltration?", "EMP11218"),
+    ("12. What data sources did you use?", "What data sources did you use?", "EMP11218"),
 ]
 
 print("==================================================")
 print("  EXECUTING 12 DEMO TEST SUITES FOR CONVERSATIONAL AI")
+print("  (100% REAL TELEMETRY DATASETS)")
 print("==================================================\n")
 
 for label, query, ctx in demo_tests:
@@ -30,5 +31,5 @@ for label, query, ctx in demo_tests:
     print(f"--- {label} ---")
     print(f"QUERY: {query}")
     print(f"TARGET USER ID: {res.get('active_user_id')}")
-    print(f"ANSWER SNIPPET:\n{res.get('answer')[:300]}...\n")
+    print(f"ANSWER SNIPPET:\n{res.get('answer')[:350]}...\n")
     print("--------------------------------------------------\n")

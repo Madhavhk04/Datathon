@@ -153,7 +153,7 @@ function MarkdownText({ text }) {
 }
 
 function AnalystWorkspace({ selectedUser, riskUsers, onOpenUser }) {
-  const defaultUser = selectedUser?.user_id || 'USR-1001';
+  const defaultUser = selectedUser?.user_id || riskUsers?.[0]?.user_id || 'EMP11218';
   const [activeUser, setActiveUser] = useState(defaultUser);
   const [messages, setMessages] = useState([
     {

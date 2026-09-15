@@ -72,8 +72,8 @@ def analyst_query(req: AnalystQueryRequest):
     if not AGENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="AI Analyst Agent not loaded")
     
-    q = req.question or req.query or "Investigate USR-1001"
-    context_user = "USR-1001"
+    q = req.question or req.query or "Investigate EMP11218"
+    context_user = "EMP11218"
     if req.context and isinstance(req.context, dict) and "user_id" in req.context:
         context_user = req.context["user_id"]
     elif req.context_user_id:
@@ -92,5 +92,8 @@ def analyst_query(req: AnalystQueryRequest):
 def investigate(user_id: str):
     if not AGENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="AI Analyst Agent not loaded")
-    return investigate_user(user_id)
+    res = investigate_user(user_id)
+    if isinstance(res, dict) and "overall_risk" in res and "risk" not in res:
+        res["risk"] = res["overall_risk"]
+    return res
 

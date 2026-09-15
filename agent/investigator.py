@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 class RiskOverview(BaseModel):
-    score: int
+    score: float
     band: str
-    breakdown: Optional[Dict[str, int]] = None
+    breakdown: Optional[Dict[str, float]] = None
 
 class EvidenceItem(BaseModel):
     timestamp: str
