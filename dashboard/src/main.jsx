@@ -153,13 +153,13 @@ function MarkdownText({ text }) {
 }
 
 function AnalystWorkspace({ selectedUser, riskUsers, onOpenUser }) {
-  const defaultUser = selectedUser?.user_id || 'USR-1001';
+  const defaultUser = selectedUser?.user_id || riskUsers?.[0]?.user_id || '';
   const [activeUser, setActiveUser] = useState(defaultUser);
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
-      text: "### SOC AI Security Analyst Initialized\n\nI am connected to your telemetry datasets (Identity, IAM, Endpoint, Firewall, Risk Scores, Threat Detections).\n\nAsk any question or select a target user to run a full multi-signal investigation brief.",
-      quick_actions: ["Investigate " + defaultUser, "Why is " + defaultUser + " critical?", "Who is the highest risk user?", "Show timeline", "Show evidence"],
+      text: "### SOC AI Security Analyst Initialized\n\nI am connected directly to the cleaned telemetry datasets (Identity, IAM, Endpoint, Firewall, Risk Scores, Threat Detections).\n\nAsk any question or select a target user to run a full multi-signal investigation brief.",
+      quick_actions: ["Investigate target user", "Why this risk?", "Show timeline", "Show evidence"],
       data_sources: ["Identity Asset Master", "IAM Audit Trail", "Endpoint Alerts", "Firewall Logs", "User Risk Scores"]
     }
   ]);
@@ -167,10 +167,12 @@ function AnalystWorkspace({ selectedUser, riskUsers, onOpenUser }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (selectedUser?.user_id && selectedUser.user_id !== activeUser) {
+    if (selectedUser?.user_id) {
       setActiveUser(selectedUser.user_id);
+    } else if (!activeUser && riskUsers?.[0]?.user_id) {
+      setActiveUser(riskUsers[0].user_id);
     }
-  }, [selectedUser]);
+  }, [selectedUser, riskUsers]);
 
   const sendQuery = async (queryText) => {
     const q = (queryText || input).trim();

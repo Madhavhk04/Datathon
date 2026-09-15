@@ -1,508 +1,441 @@
 import os
 import pandas as pd
+from typing import Dict, List, Any, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 
-# Synthetic Demo User Profiles for USR-1001..USR-1004
-DEMO_RISK = {
-    "USR-1001": {
-        "user_id": "USR-1001",
-        "username": "alex.vance",
-        "department": "Finance / Core Admin",
-        "role": "Senior Systems Administrator",
-        "risk_score": 92,
-        "risk_band": "CRITICAL",
-        "risk_drivers": "Post-termination credential access; LSASS memory dump; 200 MB egress to external IP",
-        "post_termination_flag": True,
-        "score_breakdown": {
-            "authentication": 95,
-            "iam": 90,
-            "endpoint": 88,
-            "threat_behaviour": 94,
-            "context": 85,
-            "cross_signal": 92
-        }
-    },
-    "USR-1002": {
-        "user_id": "USR-1002",
-        "username": "elena.rostova",
-        "department": "Engineering",
-        "role": "DevOps Engineer",
-        "risk_score": 76,
-        "risk_band": "HIGH",
-        "risk_drivers": "Privilege escalation attempts; AWS IAM Admin role access",
-        "post_termination_flag": False,
-        "score_breakdown": {
-            "authentication": 70,
-            "iam": 85,
-            "endpoint": 60,
-            "threat_behaviour": 72,
-            "context": 50,
-            "cross_signal": 65
-        }
-    },
-    "USR-1003": {
-        "user_id": "USR-1003",
-        "username": "marcus.chen",
-        "department": "Sales",
-        "role": "Account Executive",
-        "risk_score": 45,
-        "risk_band": "MEDIUM",
-        "risk_drivers": "Multiple failed auth attempts; travel context anomaly",
-        "post_termination_flag": False,
-        "score_breakdown": {
-            "authentication": 50,
-            "iam": 30,
-            "endpoint": 40,
-            "threat_behaviour": 42,
-            "context": 35,
-            "cross_signal": 40
-        }
-    },
-    "USR-1004": {
-        "user_id": "USR-1004",
-        "username": "sarah.jenkins",
-        "department": "Marketing",
-        "role": "Content Specialist",
-        "risk_score": 25,
-        "risk_band": "LOW",
-        "risk_drivers": "Routine monitoring; single failed login",
-        "post_termination_flag": False,
-        "score_breakdown": {
-            "authentication": 20,
-            "iam": 15,
-            "endpoint": 25,
-            "threat_behaviour": 20,
-            "context": 10,
-            "cross_signal": 15
-        }
-    }
-}
+# In-memory DataFrame cache with mtime validation
+_CACHE: Dict[str, Any] = {}
+_MTIMES: Dict[str, float] = {}
 
-DEMO_IDENTITY = {
-    "USR-1001": {
-        "user_id": "USR-1001",
-        "user_name": "Alex Vance",
-        "username": "alex.vance",
-        "email": "alex.vance@company.com",
-        "department": "Finance",
-        "role": "Systems Administrator",
-        "employment_status": "TERMINATED",
-        "termination_date": "2026-09-10",
-        "hostname": "DEV-LAPTOP-088",
-        "device_id": "DEV-0101",
-        "manager": "david.chen",
-        "location": "Headquarters",
-        "assigned_assets": "DEV-LAPTOP-088"
-    },
-    "USR-1002": {
-        "user_id": "USR-1002",
-        "user_name": "Elena Rostova",
-        "username": "elena.rostova",
-        "email": "elena.rostova@company.com",
-        "department": "Engineering",
-        "role": "DevOps Engineer",
-        "employment_status": "ACTIVE",
-        "termination_date": "",
-        "hostname": "DEV-LAPTOP-042",
-        "device_id": "DEV-0102",
-        "manager": "sam.wilson",
-        "location": "Remote",
-        "assigned_assets": "DEV-LAPTOP-042"
-    },
-    "USR-1003": {
-        "user_id": "USR-1003",
-        "user_name": "Marcus Chen",
-        "username": "marcus.chen",
-        "email": "marcus.chen@company.com",
-        "department": "Sales",
-        "role": "Account Executive",
-        "employment_status": "ACTIVE",
-        "termination_date": "",
-        "hostname": "WS-1003",
-        "device_id": "DEV-0103",
-        "manager": "rachel.green",
-        "location": "Regional Office",
-        "assigned_assets": "WS-1003"
-    },
-    "USR-1004": {
-        "user_id": "USR-1004",
-        "user_name": "Sarah Jenkins",
-        "username": "sarah.jenkins",
-        "email": "sarah.jenkins@company.com",
-        "department": "Marketing",
-        "role": "Content Specialist",
-        "employment_status": "ACTIVE",
-        "termination_date": "",
-        "hostname": "WS-1004",
-        "device_id": "DEV-0104",
-        "manager": "paul.walker",
-        "location": "Headquarters",
-        "assigned_assets": "WS-1004"
-    }
-}
+def _get_df(subpath: str) -> pd.DataFrame:
+    """Retrieve or load a CSV dataframe with timestamp-based cache invalidation."""
+    full_path = os.path.join(DATA_DIR, subpath)
+    if not os.path.exists(full_path):
+        return pd.DataFrame()
+    mtime = os.path.getmtime(full_path)
+    if subpath not in _CACHE or _MTIMES.get(subpath) != mtime:
+        _CACHE[subpath] = pd.read_csv(full_path, low_memory=False)
+        _MTIMES[subpath] = mtime
+    return _CACHE[subpath]
 
-DEMO_THREATS = {
-    "USR-1001": [
-        {
-            "detection_id": "DET-5001",
-            "threat_name": "Data Exfiltration via Encrypted Tunnel",
-            "severity": "CRITICAL",
-            "status": "ACTIVE",
-            "timestamp": "2026-09-14T14:28:00Z",
-            "description": "200 MB total egress transferred to external IP 198.51.100.44 following credential dumping."
-        },
-        {
-            "detection_id": "DET-5002",
-            "threat_name": "Encoded PowerShell Execution",
-            "severity": "HIGH",
-            "status": "ACTIVE",
-            "timestamp": "2026-09-14T14:10:00Z",
-            "description": "Suspicious encoded PowerShell script execution detected on host DEV-LAPTOP-088."
-        }
-    ],
-    "USR-1002": [
-        {
-            "detection_id": "DET-5003",
-            "threat_name": "Privilege Escalation via IAM Role Elevation",
-            "severity": "HIGH",
-            "status": "ACTIVE",
-            "timestamp": "2026-09-14T11:20:00Z",
-            "description": "Unauthorized role elevation attempt to AWS_IAM_AdminRole."
-        }
-    ]
-}
+def _clean_val(v: Any, default: Any = "") -> Any:
+    """Helper to replace NaN / None with safe defaults."""
+    if pd.isna(v) or v is None:
+        return default
+    return v
 
-DEMO_TIMELINE = {
-    "USR-1001": [
-        {
-            "timestamp": "2026-09-14T14:05:00Z",
-            "source": "IAM Audit Trail",
-            "event_type": "IAM_PRIVILEGE_ELEVATION",
-            "severity": "HIGH",
-            "details": "Action: ElevateRole, Resource: AWS_IAM_AdminRole, Status: SUCCESS, IP: 198.51.100.44"
-        },
-        {
-            "timestamp": "2026-09-14T14:10:00Z",
-            "source": "Endpoint Alert (EDR)",
-            "event_type": "SUSPICIOUS_POWERSHELL",
-            "severity": "HIGH",
-            "details": "Device: DEV-LAPTOP-088, Process: powershell.exe, Action: ENCODED_COMMAND"
-        },
-        {
-            "timestamp": "2026-09-14T14:15:00Z",
-            "source": "Endpoint Alert (EDR)",
-            "event_type": "LSASS_MEMORY_DUMP",
-            "severity": "CRITICAL",
-            "details": "Device: DEV-LAPTOP-088, Process: procdump.exe, Action: MEMORY_READ_LSASS"
-        },
-        {
-            "timestamp": "2026-09-14T14:25:00Z",
-            "source": "Firewall Logs",
-            "event_type": "NETWORK_TRAFFIC (TCP)",
-            "severity": "HIGH",
-            "details": "Src: 10.0.4.12, Dst: 198.51.100.44:443, Bytes: 52,428,800, Action: ALLOW"
-        },
-        {
-            "timestamp": "2026-09-14T14:28:00Z",
-            "source": "Firewall Logs",
-            "event_type": "NETWORK_TRAFFIC (TCP)",
-            "severity": "HIGH",
-            "details": "Src: 10.0.4.12, Dst: 198.51.100.44:8443, Bytes: 157,286,400, Action: ALLOW"
-        }
-    ],
-    "USR-1002": [
-        {
-            "timestamp": "2026-09-14T11:20:00Z",
-            "source": "IAM Audit Trail",
-            "event_type": "IAM_ROLE_ELEVATION",
-            "severity": "HIGH",
-            "details": "Action: AssumeRole, Resource: AWS_IAM_AdminRole, Status: SUCCESS, IP: 10.20.4.15"
-        }
-    ],
-    "USR-1003": [
-        {
-            "timestamp": "2026-09-14T09:15:00Z",
-            "source": "IAM Audit Trail",
-            "event_type": "FAILED_LOGIN",
-            "severity": "MEDIUM",
-            "details": "User: marcus.chen, Event: FAILED_LOGIN, Method: PASSWORD, IP: 192.168.1.50"
-        }
-    ]
-}
-
-def resolve_target_user_id(user_id: str) -> str:
+def resolve_target_user_id(query_or_id: str) -> str:
     """
-    Resolves user_id aliases.
+    Resolves natural language name or user ID to canonical uppercase user ID (e.g. EMP11218).
+    Supports direct IDs, usernames, and full employee names.
     """
-    uid_str = str(user_id).strip().upper()
-    if uid_str in DEMO_RISK:
-        return uid_str
+    raw = str(query_or_id).strip()
+    if not raw:
+        risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
+        if not risk_df.empty and "user_id" in risk_df.columns:
+            return str(risk_df.sort_values(by="risk_score", ascending=False).iloc[0]["user_id"]).upper()
+        return ""
+    
+    import re
+    clean = raw.upper()
+    # Check if string contains explicit EMP or USR pattern
+    emp_match = re.search(r'\b(EMP\d{4,6}|USR-\d{4})\b', raw, re.IGNORECASE)
+    if emp_match:
+        return emp_match.group(1).upper()
 
-    risk_path = os.path.join(DATA_DIR, "analytics", "user_risk_scores.csv")
-    ident_path = os.path.join(DATA_DIR, "processed", "track2_identity_asset_master_clean.csv")
+    # Direct match in Risk Scores
+    risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
+    if not risk_df.empty and "user_id" in risk_df.columns:
+        if clean in risk_df["user_id"].astype(str).str.upper().values:
+            return clean
 
-    if os.path.exists(risk_path):
-        df = pd.read_csv(risk_path)
-        if uid_str in df["user_id"].astype(str).str.upper().values:
-            return uid_str
+    # Direct match in Identity Master
+    id_df = _get_df(os.path.join("processed", "track2_identity_asset_master_clean.csv"))
+    if not id_df.empty and "user_id" in id_df.columns:
+        if clean in id_df["user_id"].astype(str).str.upper().values:
+            return clean
+        
+        # Name match
+        raw_lower = raw.lower()
+        if "full_name" in id_df.columns:
+            name_matches = id_df[id_df["full_name"].astype(str).str.lower() == raw_lower]
+            if not name_matches.empty:
+                return str(name_matches.iloc[0]["user_id"]).upper()
+        
+        # Username match
+        if "username" in id_df.columns:
+            uname_matches = id_df[id_df["username"].astype(str).str.lower() == raw_lower]
+            if not uname_matches.empty:
+                return str(uname_matches.iloc[0]["user_id"]).upper()
+        
+        # Word-level name match (e.g. "Karan" in "Karan Goda")
+        if "full_name" in id_df.columns:
+            for word in raw_lower.split():
+                if len(word) >= 3:
+                    p_matches = id_df[id_df["full_name"].astype(str).str.lower().str.contains(r'\b' + re.escape(word) + r'\b', regex=True)]
+                    if not p_matches.empty:
+                        return str(p_matches.iloc[0]["user_id"]).upper()
 
-    if os.path.exists(ident_path):
-        df_id = pd.read_csv(ident_path)
-        if uid_str in df_id["user_id"].astype(str).str.upper().values:
-            return uid_str
+    return ""
 
-    # Synthetic demo mappings fallback
-    if uid_str in ["ALEX VANCE", "ALEX"]:
-        return "USR-1001"
-    if uid_str in ["ELENA ROSTOVA", "ELENA"]:
-        return "USR-1002"
-    if uid_str in ["MARCUS CHEN"]:
-        return "USR-1003"
+def get_identity_context(user_id: str) -> dict:
+    """
+    Retrieve identity, employment status, manager, assets, and context for a user
+    from track2_identity_asset_master_clean.csv.
+    """
+    uid = resolve_target_user_id(user_id)
+    id_df = _get_df(os.path.join("processed", "track2_identity_asset_master_clean.csv"))
+    
+    if id_df.empty or "user_id" not in id_df.columns:
+        return {"error": "Identity Master dataset unavailable", "user_id": uid}
+    
+    rows = id_df[id_df["user_id"].astype(str).str.upper() == uid]
+    if rows.empty:
+        return {"error": f"User {uid} not found in Identity Master", "user_id": uid}
+    
+    row = rows.iloc[0].to_dict()
+    hostname = _clean_val(row.get("hostname"), "")
+    device_id = _clean_val(row.get("device_id"), "")
+    assets = [x for x in [hostname, device_id] if x]
 
-    return uid_str
+    return {
+        "user_id": uid,
+        "original_query_id": str(user_id),
+        "user_name": str(_clean_val(row.get("full_name"), row.get("username") or uid)),
+        "username": str(_clean_val(row.get("username"), "")),
+        "department": str(_clean_val(row.get("department"), "Unknown")),
+        "role": str(_clean_val(row.get("role"), "Employee")),
+        "location": str(_clean_val(row.get("location"), "Unknown")),
+        "employment_status": str(_clean_val(row.get("status"), "Active")),
+        "hire_date": str(_clean_val(row.get("hire_date"), "")),
+        "termination_date": str(_clean_val(row.get("termination_date"), "")),
+        "hostname": str(hostname),
+        "device_id": str(device_id),
+        "manager": str(_clean_val(row.get("manager_username"), "None")),
+        "device_id_conflict": bool(row.get("device_id_conflict", False)),
+        "device_user_count": int(_clean_val(row.get("device_user_count"), 1) or 1),
+        "assigned_assets": ", ".join(assets) if assets else "None"
+    }
 
 def get_user_risk(user_id: str) -> dict:
     """
-    Retrieve risk score, risk band, and dimension score breakdown for a specific user.
+    Retrieve 6-dimensional risk score, risk band, and exact risk drivers for a user
+    from user_risk_scores.csv.
     """
-    resolved_id = resolve_target_user_id(user_id)
-    if resolved_id in DEMO_RISK:
-        return DEMO_RISK[resolved_id]
+    uid = resolve_target_user_id(user_id)
+    risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
+    
+    if risk_df.empty or "user_id" not in risk_df.columns:
+        return {"error": "user_risk_scores.csv not found", "user_id": uid}
+    
+    rows = risk_df[risk_df["user_id"].astype(str).str.upper() == uid]
+    if rows.empty:
+        return {"error": f"User {uid} not found in risk scores", "user_id": uid}
+    
+    row = rows.iloc[0].to_dict()
+    
+    def _num(key, default=0.0):
+        v = row.get(key)
+        try:
+            val = float(v)
+            return 0.0 if pd.isna(val) else val
+        except (ValueError, TypeError):
+            return default
 
-    csv_path = os.path.join(DATA_DIR, "analytics", "user_risk_scores.csv")
-    if not os.path.exists(csv_path):
-        return {"error": "user_risk_scores.csv not found", "user_id": user_id}
+    score = round(_num("risk_score", 0.0), 1)
+    band = str(_clean_val(row.get("risk_band") or row.get("risk_level"), "Low")).title()
+    drivers = str(_clean_val(row.get("risk_drivers"), "Routine activity monitoring."))
 
-    df = pd.read_csv(csv_path)
-    user_rows = df[df["user_id"].astype(str).str.upper() == resolved_id]
-    if user_rows.empty:
-        return {"error": f"User {user_id} not found in risk scores", "user_id": user_id}
-
-    row = user_rows.iloc[0].to_dict()
     return {
-        "user_id": str(row["user_id"]),
+        "user_id": uid,
         "original_query_id": str(user_id),
-        "username": str(row.get("username", "")),
-        "department": str(row.get("department", "")),
-        "role": str(row.get("role", "")),
-        "risk_score": int(float(row.get("risk_score", 0))),
-        "risk_band": str(row.get("risk_band") or row.get("risk_level") or "LOW").upper(),
-        "risk_drivers": str(row.get("risk_drivers", "")),
+        "username": str(_clean_val(row.get("username"), "")),
+        "department": str(_clean_val(row.get("department"), "")),
+        "role": str(_clean_val(row.get("role"), "")),
+        "status": str(_clean_val(row.get("status"), "Active")),
+        "risk_score": score,
+        "risk_band": band,
+        "risk_drivers": drivers,
         "post_termination_flag": str(row.get("post_termination_activity_flag", "False")).lower() in ["true", "1"],
         "score_breakdown": {
-            "authentication": int(float(row.get("authentication_risk", row.get("auth_score", 0)))),
-            "iam": int(float(row.get("iam_risk", row.get("iam_score", 0)))),
-            "endpoint": int(float(row.get("endpoint_severity_risk", row.get("endpoint_score", 0)))),
-            "threat_behaviour": int(float(row.get("threat_behavior_risk", row.get("threat_score", 0)))),
-            "context": int(float(row.get("contextual_risk", row.get("context_score", 0)))),
-            "cross_signal": int(float(row.get("cross_signal_bonus", row.get("cross_signal_score", 0))))
+            "authentication": round(_num("authentication_risk", 0.0), 1),
+            "iam": round(_num("iam_risk", 0.0), 1),
+            "endpoint": round(_num("endpoint_severity_risk", 0.0), 1),
+            "threat_behaviour": round(_num("threat_behavior_risk", 0.0), 1),
+            "context": round(_num("contextual_risk", 0.0), 1),
+            "cross_signal": round(_num("cross_signal_bonus", 0.0), 1)
+        },
+        "metrics": {
+            "iam_events": int(_num("iam_events")),
+            "iam_failed_auth": int(_num("iam_failed_auth")),
+            "iam_mfa_failures": int(_num("iam_mfa_failures")),
+            "iam_high_risk_events": int(_num("iam_high_risk_events")),
+            "endpoint_alerts": int(_num("endpoint_alerts")),
+            "endpoint_critical_alerts": int(_num("endpoint_critical_alerts")),
+            "endpoint_malware_alerts": int(_num("endpoint_malware_alerts")),
+            "endpoint_powershell": int(_num("endpoint_powershell")),
+            "post_termination_iam_events": int(_num("post_termination_iam_events")),
+            "post_termination_endpoint_events": int(_num("post_termination_endpoint_events"))
         }
     }
 
 def get_user_threats(user_id: str) -> dict:
     """
-    Retrieve threat detections and investigation queue status for a specific user.
+    Retrieve active threat detection rules and investigation queue status for a user
+    from threat_detections.csv and investigation_queue.csv.
     """
-    resolved_id = resolve_target_user_id(user_id)
-    if resolved_id in DEMO_THREATS:
-        return {
-            "user_id": resolved_id,
-            "original_query_id": str(user_id),
-            "active_threats_count": len(DEMO_THREATS[resolved_id]),
-            "threat_detections": DEMO_THREATS[resolved_id],
-            "investigation_queue": []
-        }
-
-    threats_path = os.path.join(DATA_DIR, "analytics", "threat_detections.csv")
-    queue_path = os.path.join(DATA_DIR, "analytics", "investigation_queue.csv")
+    uid = resolve_target_user_id(user_id)
+    t_df = _get_df(os.path.join("analytics", "threat_detections.csv"))
+    q_df = _get_df(os.path.join("analytics", "investigation_queue.csv"))
 
     detections = []
-    if os.path.exists(threats_path):
-        df_t = pd.read_csv(threats_path)
-        if "user_id" in df_t.columns:
-            u_t = df_t[df_t["user_id"].astype(str).str.upper() == resolved_id]
-            for _, r in u_t.iterrows():
-                rec = r.to_dict()
-                clean_rec = {k: ("" if pd.isna(v) else v) for k, v in rec.items()}
-                detections.append(clean_rec)
+    if not t_df.empty and "user_id" in t_df.columns:
+        u_t = t_df[t_df["user_id"].astype(str).str.upper() == uid]
+        for _, r in u_t.iterrows():
+            detections.append({
+                "threat_id": str(_clean_val(r.get("threat_id"))),
+                "threat_name": str(_clean_val(r.get("threat_type"))),
+                "threat_type": str(_clean_val(r.get("threat_type"))),
+                "severity": str(_clean_val(r.get("severity"), "Medium")).upper(),
+                "confidence": str(_clean_val(r.get("confidence"), "Medium")),
+                "evidence": str(_clean_val(r.get("evidence"), "")),
+                "first_observed": str(_clean_val(r.get("first_observed"), "")),
+                "last_observed": str(_clean_val(r.get("last_observed"), "")),
+                "related_hostname": str(_clean_val(r.get("related_hostname"), "")),
+                "recommended_action": str(_clean_val(r.get("recommended_action"), ""))
+            })
 
-    queue_info = []
-    if os.path.exists(queue_path):
-        df_q = pd.read_csv(queue_path)
-        if "user_id" in df_q.columns:
-            u_q = df_q[df_q["user_id"].astype(str).str.upper() == resolved_id]
-            for _, r in u_q.iterrows():
-                rec = r.to_dict()
-                clean_rec = {k: ("" if pd.isna(v) else v) for k, v in rec.items()}
-                queue_info.append(clean_rec)
+    queue_entry = None
+    if not q_df.empty and "user_id" in q_df.columns:
+        u_q = q_df[q_df["user_id"].astype(str).str.upper() == uid]
+        if not u_q.empty:
+            qr = u_q.iloc[0].to_dict()
+            queue_entry = {
+                "priority_rank": int(_clean_val(qr.get("priority_rank"), 0) or 0),
+                "investigation_priority": str(_clean_val(qr.get("investigation_priority"), "Medium")),
+                "investigation_priority_score": float(_clean_val(qr.get("investigation_priority_score"), 0) or 0),
+                "threat_detection_count": int(_clean_val(qr.get("threat_detection_count"), 0) or 0),
+                "distinct_threat_types": int(_clean_val(qr.get("distinct_threat_types"), 0) or 0),
+                "threat_types": str(_clean_val(qr.get("threat_types"), "")),
+                "investigation_reason": str(_clean_val(qr.get("investigation_reason"), "")),
+                "recommended_action": str(_clean_val(qr.get("recommended_action"), ""))
+            }
 
     return {
-        "user_id": resolved_id,
+        "user_id": uid,
         "original_query_id": str(user_id),
         "active_threats_count": len(detections),
         "threat_detections": detections,
-        "investigation_queue": queue_info
+        "investigation_queue": queue_entry
     }
 
-def get_identity_context(user_id: str) -> dict:
+def get_iam_events(user_id: str, limit: int = 50) -> list:
     """
-    Retrieve identity, employment status, manager, assets, and context for a user.
+    Retrieve raw IAM audit trail events for a user from track2_iam_audit_trail_clean.csv.
     """
-    resolved_id = resolve_target_user_id(user_id)
-    if resolved_id in DEMO_IDENTITY:
-        return DEMO_IDENTITY[resolved_id]
+    uid = resolve_target_user_id(user_id)
+    iam_df = _get_df(os.path.join("processed", "track2_iam_audit_trail_clean.csv"))
+    
+    if iam_df.empty or "user_id" not in iam_df.columns:
+        return []
+    
+    u_iam = iam_df[iam_df["user_id"].astype(str).str.upper() == uid]
+    if u_iam.empty:
+        return []
+    
+    events = []
+    for _, r in u_iam.sort_values(by="timestamp", ascending=True).head(limit).iterrows():
+        events.append({
+            "event_id": str(_clean_val(r.get("event_id"))),
+            "timestamp": str(_clean_val(r.get("timestamp"))),
+            "event_type": str(_clean_val(r.get("event_type"))),
+            "auth_method": str(_clean_val(r.get("auth_method"))),
+            "mfa_passed": bool(r.get("mfa_passed", True)),
+            "source_ip": str(_clean_val(r.get("source_ip"))),
+            "hostname": str(_clean_val(r.get("hostname"))),
+            "device_id": str(_clean_val(r.get("device_id"))),
+            "risk_score": float(_clean_val(r.get("risk_score"), 0) or 0),
+            "risk_level": str(_clean_val(r.get("risk_level"))),
+            "failure_reason": str(_clean_val(r.get("failure_reason"))),
+            "geo_location": str(_clean_val(r.get("geo_location")))
+        })
+    return events
 
-    path = os.path.join(DATA_DIR, "processed", "track2_identity_asset_master_clean.csv")
-    if not os.path.exists(path):
-        return {"error": "identity master clean CSV not found", "user_id": user_id}
-
-    df = pd.read_csv(path)
-    rows = df[df["user_id"].astype(str).str.upper() == resolved_id]
-    if rows.empty:
-        return {"error": f"User {user_id} not found in identity master", "user_id": user_id}
-
-    row = rows.iloc[0].to_dict()
-    clean_row = {k: ("" if pd.isna(v) else v) for k, v in row.items()}
-    return {
-        "user_id": str(clean_row["user_id"]),
-        "original_query_id": str(user_id),
-        "user_name": str(clean_row.get("full_name") or clean_row.get("user_name") or clean_row.get("username") or "Unknown User"),
-        "username": str(clean_row.get("username", "")),
-        "department": str(clean_row.get("department", "")),
-        "role": str(clean_row.get("role", "")),
-        "employment_status": str(clean_row.get("status") or clean_row.get("employment_status") or "ACTIVE").upper(),
-        "termination_date": str(clean_row.get("termination_date", "")),
-        "hostname": str(clean_row.get("hostname", "")),
-        "device_id": str(clean_row.get("device_id", "")),
-        "manager": str(clean_row.get("manager_username") or clean_row.get("manager", "")),
-        "location": str(clean_row.get("location", "")),
-        "assigned_assets": str(clean_row.get("hostname") or clean_row.get("device_id") or clean_row.get("assigned_assets", ""))
-    }
-
-def build_evidence_timeline(user_id: str) -> dict:
+def get_endpoint_events(user_id: str, limit: int = 50) -> list:
     """
-    Chronologically merge events from IAM audit, Endpoint alerts, and Firewall logs.
+    Retrieve endpoint security alerts for a user from track2_endpoint_alerts_clean.csv.
     """
-    resolved_id = resolve_target_user_id(user_id)
-    if resolved_id in DEMO_TIMELINE:
-        events = DEMO_TIMELINE[resolved_id]
-        sev_map = {"CRITICAL": 10, "HIGH": 7, "MEDIUM": 4, "LOW": 1}
-        chart_data = [
-            {
-                "timestamp": ev["timestamp"],
-                "severity_level": sev_map.get(ev["severity"].upper(), 3),
-                "event_source": ev["source"],
-                "event_type": ev["event_type"]
-            }
-            for ev in events if ev.get("timestamp")
-        ]
-        return {
-            "user_id": resolved_id,
-            "original_query_id": str(user_id),
-            "total_events": len(events),
-            "timeline": events,
-            "chart_data": chart_data
-        }
+    uid = resolve_target_user_id(user_id)
+    edr_df = _get_df(os.path.join("processed", "track2_endpoint_alerts_clean.csv"))
+    
+    if edr_df.empty or "user_id" not in edr_df.columns:
+        return []
+    
+    u_edr = edr_df[edr_df["user_id"].astype(str).str.upper() == uid]
+    if u_edr.empty:
+        return []
+    
+    alerts = []
+    for _, r in u_edr.sort_values(by="detected_timestamp", ascending=True).head(limit).iterrows():
+        alerts.append({
+            "alert_id": str(_clean_val(r.get("alert_id"))),
+            "detected_timestamp": str(_clean_val(r.get("detected_timestamp"))),
+            "alert_name": str(_clean_val(r.get("alert_name"))),
+            "severity": str(_clean_val(r.get("severity"), "Medium")).upper(),
+            "status": str(_clean_val(r.get("status"), "New")),
+            "process_name": str(_clean_val(r.get("process_name"), "N/A")),
+            "file_path": str(_clean_val(r.get("file_path"), "N/A")),
+            "hostname": str(_clean_val(r.get("hostname"), "N/A")),
+            "description": str(_clean_val(r.get("description"), ""))
+        })
+    return alerts
 
-    iam_path = os.path.join(DATA_DIR, "processed", "track2_iam_audit_trail_clean.csv")
-    edr_path = os.path.join(DATA_DIR, "processed", "track2_endpoint_alerts_clean.csv")
-    fw_path = os.path.join(DATA_DIR, "processed", "track2_firewall_logs_clean.csv")
+def get_related_hosts(user_id: str) -> list:
+    """
+    Identify all hostnames correlated with a user across Identity, IAM, and Endpoint datasets.
+    """
+    uid = resolve_target_user_id(user_id)
+    hosts = set()
+
+    ident = get_identity_context(uid)
+    if ident.get("hostname"):
+        hosts.add(str(ident["hostname"]).strip())
+
+    iam_events = get_iam_events(uid, limit=100)
+    for ev in iam_events:
+        if ev.get("hostname") and ev["hostname"] != "nan":
+            hosts.add(str(ev["hostname"]).strip())
+
+    endpoint_events = get_endpoint_events(uid, limit=100)
+    for ev in endpoint_events:
+        if ev.get("hostname") and ev["hostname"] != "N/A":
+            hosts.add(str(ev["hostname"]).strip())
+
+    return sorted(list(hosts))
+
+def get_firewall_events(user_id: str, limit: int = 50) -> list:
+    """
+    Retrieve firewall logs associated with the user's host(s) from track2_firewall_logs_clean.csv.
+    """
+    uid = resolve_target_user_id(user_id)
+    fw_df = _get_df(os.path.join("processed", "track2_firewall_logs_clean.csv"))
+    
+    if fw_df.empty:
+        return []
+
+    hosts = get_related_hosts(uid)
+    if not hosts:
+        return []
+
+    host_keys = [h.lower() for h in hosts]
+    u_fw = fw_df[fw_df["hostname_join_key"].astype(str).str.lower().isin(host_keys)]
+    if u_fw.empty and "hostname" in fw_df.columns:
+        u_fw = fw_df[fw_df["hostname"].astype(str).str.lower().isin(host_keys)]
+
+    if u_fw.empty:
+        return []
 
     events = []
+    for _, r in u_fw.sort_values(by="timestamp", ascending=True).head(limit).iterrows():
+        b_sent_raw = pd.to_numeric(r.get("bytes_sent"), errors="coerce")
+        b_sent = 0.0 if pd.isna(b_sent_raw) else float(b_sent_raw)
 
-    # 1. IAM events
-    if os.path.exists(iam_path):
-        df_iam = pd.read_csv(iam_path)
-        if "user_id" in df_iam.columns:
-            u_iam = df_iam[df_iam["user_id"].astype(str).str.upper() == resolved_id]
-            for _, r in u_iam.iterrows():
-                ts = str(r.get("timestamp", ""))
-                events.append({
-                    "timestamp": ts,
-                    "source": "IAM Audit Trail",
-                    "event_type": str(r.get("event_type", "IAM_EVENT")),
-                    "severity": "HIGH" if (r.get("mfa_passed") is False or r.get("event_type") in ["MFA_FAILURE", "FAILED_LOGIN"]) else "MEDIUM",
-                    "details": f"User: {r.get('username')}, Event: {r.get('event_type')}, Method: {r.get('auth_method')}, IP: {r.get('source_ip')}, Location: {r.get('geo_location')}"
-                })
+        b_rec_raw = pd.to_numeric(r.get("bytes_received"), errors="coerce")
+        b_rec = 0.0 if pd.isna(b_rec_raw) else float(b_rec_raw)
 
-    # 2. Endpoint events
-    if os.path.exists(edr_path):
-        df_edr = pd.read_csv(edr_path)
-        if "user_id" in df_edr.columns:
-            u_edr = df_edr[df_edr["user_id"].astype(str).str.upper() == resolved_id]
-            for _, r in u_edr.iterrows():
-                ts = str(r.get("detected_timestamp") or r.get("timestamp", ""))
-                events.append({
-                    "timestamp": ts,
-                    "source": "Endpoint Alert (EDR)",
-                    "event_type": str(r.get("alert_name", "ENDPOINT_ALERT")),
-                    "severity": str(r.get("severity", "MEDIUM")).upper(),
-                    "details": f"Host: {r.get('hostname')}, Product: {r.get('endpoint_product')}, Process: {r.get('process_name') or 'N/A'}, Status: {r.get('status')}"
-                })
+        events.append({
+            "log_id": str(_clean_val(r.get("log_id"))),
+            "timestamp": str(_clean_val(r.get("timestamp"))),
+            "hostname": str(_clean_val(r.get("hostname"))),
+            "src_ip": str(_clean_val(r.get("src_ip"))),
+            "dst_ip": str(_clean_val(r.get("dst_ip"))),
+            "dst_port": str(_clean_val(r.get("dst_port"))),
+            "protocol": str(_clean_val(r.get("protocol"), "TCP")),
+            "action": str(_clean_val(r.get("action"), "ALLOW")),
+            "bytes_sent": int(b_sent),
+            "bytes_received": int(b_rec),
+            "total_bytes": int(b_sent + b_rec),
+            "threat_flag": bool(r.get("threat_flag", False)),
+            "rule_name": str(_clean_val(r.get("rule_name"))),
+            "geo_country": str(_clean_val(r.get("geo_country")))
+        })
+    return events
 
-    # 3. Firewall events
-    if os.path.exists(fw_path):
-        df_fw = pd.read_csv(fw_path)
-        ident = get_identity_context(resolved_id)
-        user_host = str(ident.get("hostname", "")).lower()
+def build_evidence_timeline(user_id: str, limit: int = 100) -> dict:
+    """
+    Chronologically merge events from real IAM audit, Endpoint alerts, and Firewall logs.
+    Includes severity scoring and chart point generation for visualization.
+    """
+    uid = resolve_target_user_id(user_id)
+    events = []
 
-        if "user_id" in df_fw.columns:
-            u_fw = df_fw[df_fw["user_id"].astype(str).str.upper() == resolved_id]
-        elif user_host and "hostname" in df_fw.columns:
-            u_fw = df_fw[df_fw["hostname"].astype(str).str.lower() == user_host]
-        elif user_host and "hostname_join_key" in df_fw.columns:
-            u_fw = df_fw[df_fw["hostname_join_key"].astype(str).str.lower() == user_host]
-        else:
-            u_fw = pd.DataFrame()
+    # 1. IAM Events
+    iam_list = get_iam_events(uid, limit=limit)
+    for ev in iam_list:
+        ts = ev.get("timestamp", "")
+        if ts and ts != "nan":
+            sev = "HIGH" if (not ev.get("mfa_passed") or "FAIL" in ev.get("event_type", "").upper()) else "MEDIUM"
+            det = f"Event: {ev.get('event_type')}, Method: {ev.get('auth_method')}, IP: {ev.get('source_ip')}, MFA: {ev.get('mfa_passed')}"
+            if ev.get("failure_reason"):
+                det += f", Reason: {ev.get('failure_reason')}"
+            events.append({
+                "timestamp": ts,
+                "source": "IAM Audit Trail",
+                "event_type": ev.get("event_type", "IAM_EVENT"),
+                "severity": sev,
+                "details": det
+            })
 
-        if not u_fw.empty:
-            for _, r in u_fw.head(10).iterrows():
-                try:
-                    b_sent = float(r.get("bytes_sent", 0) or 0)
-                except (ValueError, TypeError):
-                    b_sent = 0.0
-                if pd.isna(b_sent): b_sent = 0.0
+    # 2. Endpoint Events
+    edr_list = get_endpoint_events(uid, limit=limit)
+    for ev in edr_list:
+        ts = ev.get("detected_timestamp", "")
+        if ts and ts != "nan":
+            events.append({
+                "timestamp": ts,
+                "source": "Endpoint Alert (EDR)",
+                "event_type": ev.get("alert_name", "EDR_ALERT"),
+                "severity": ev.get("severity", "MEDIUM"),
+                "details": f"Process: {ev.get('process_name')}, Host: {ev.get('hostname')}, Status: {ev.get('status')}"
+            })
 
-                try:
-                    b_rec = float(r.get("bytes_received", 0) or 0)
-                except (ValueError, TypeError):
-                    b_rec = 0.0
-                if pd.isna(b_rec): b_rec = 0.0
-
-                bytes_tf = b_sent + b_rec
-                sev = "HIGH" if bytes_tf > 10000000 else "MEDIUM"
-                ts = str(r.get("timestamp", ""))
-                events.append({
-                    "timestamp": ts,
-                    "source": "Firewall Logs",
-                    "event_type": f"NETWORK_TRAFFIC ({r.get('protocol', 'TCP')})",
-                    "severity": sev,
-                    "details": f"Host: {r.get('hostname') or 'N/A'}, Dst: {r.get('dst_ip') or 'N/A'}:{r.get('dst_port') or 'N/A'}, Bytes: {int(bytes_tf):,}, Action: {r.get('action') or 'N/A'}, Country: {r.get('geo_country') or 'N/A'}"
-                })
+    # 3. Firewall Events
+    fw_list = get_firewall_events(uid, limit=limit)
+    for ev in fw_list:
+        ts = ev.get("timestamp", "")
+        if ts and ts != "nan":
+            b_total = ev.get("total_bytes", 0)
+            sev = "CRITICAL" if ev.get("threat_flag") else ("HIGH" if b_total > 10000000 else "MEDIUM")
+            events.append({
+                "timestamp": ts,
+                "source": "Firewall Logs",
+                "event_type": f"NETWORK_TRAFFIC ({ev.get('protocol', 'TCP')})",
+                "severity": sev,
+                "details": f"Host: {ev.get('hostname')}, Dst: {ev.get('dst_ip')}:{ev.get('dst_port')}, Bytes: {b_total:,}, Action: {ev.get('action')}, Country: {ev.get('geo_country')}"
+            })
 
     # Sort events chronologically
-    events.sort(key=lambda x: x["timestamp"])
+    events.sort(key=lambda x: str(x.get("timestamp", "")))
+    trimmed_events = events[:limit]
 
     sev_map = {"CRITICAL": 10, "HIGH": 7, "MEDIUM": 4, "LOW": 1}
-
     chart_data = []
-    for ev in events:
-        if ev["timestamp"]:
-            numeric_sev = sev_map.get(ev["severity"].upper(), 3)
+    for ev in trimmed_events:
+        ts = ev.get("timestamp")
+        if ts and ts != "nan":
+            numeric_sev = sev_map.get(str(ev.get("severity", "MEDIUM")).upper(), 3)
             chart_data.append({
-                "timestamp": ev["timestamp"],
+                "timestamp": str(ts),
                 "severity_level": numeric_sev,
-                "event_source": ev["source"],
-                "event_type": ev["event_type"]
+                "event_source": str(ev.get("source")),
+                "event_type": str(ev.get("event_type"))
             })
 
     return {
-        "user_id": resolved_id,
+        "user_id": uid,
         "original_query_id": str(user_id),
-        "total_events": len(events),
-        "timeline": events,
+        "total_events": len(trimmed_events),
+        "timeline": trimmed_events,
         "chart_data": chart_data
     }
-
-
