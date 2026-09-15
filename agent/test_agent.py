@@ -57,5 +57,22 @@ class TestAISecurityAgent(unittest.TestCase):
         self.assertEqual(report["user_id"], "USR-1003")
         self.assertEqual(report["overall_risk"]["band"], "MEDIUM")
 
+    def test_05_chat_analyst_query(self):
+        """Test conversational AI analyst query processing and suggested_actions contract."""
+        from chat_analyst import process_chat_query
+        res = process_chat_query("Investigate USR-1001", "USR-1001")
+        self.assertEqual(res["active_user_id"], "USR-1001")
+        self.assertIn("Alex Vance", res["answer"])
+        self.assertIn("quick_actions", res)
+        self.assertIn("suggested_actions", res)
+        self.assertEqual(res["quick_actions"], res["suggested_actions"])
+
+    def test_06_uncertainty_verification(self):
+        """Test that challenge/uncertainty question is correctly answered without intent shadowing."""
+        from chat_analyst import process_chat_query
+        res = process_chat_query("Does network traffic alone prove exfiltration?", "USR-1001")
+        self.assertIn("Threat Hypothesis Verification & Uncertainty Challenge", res["answer"])
+        self.assertIn("does NOT provide definitive proof", res["answer"])
+
 if __name__ == "__main__":
     unittest.main()

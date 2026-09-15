@@ -69,7 +69,7 @@ def get_highest_risk_user() -> dict:
             }
     return {"user_id": "USR-1001", "user_name": "Alex Vance", "risk_score": 92, "risk_band": "CRITICAL"}
 
-def process_chat_query(query: str, context_user_id: str = "USR-1001") -> dict:
+def _process_chat_query_raw(query: str, context_user_id: str = "USR-1001") -> dict:
     """
     Process a natural language conversational query, invoke the real investigation engine,
     and format a grounded, evidence-first answer with data integrity fixes.
@@ -347,84 +347,8 @@ def process_chat_query(query: str, context_user_id: str = "USR-1001") -> dict:
             "data_sources": ["Threat Detections", "IAM Audit Trail", "Endpoint Alerts"]
         }
 
-    # F. Network / Traffic Query ("How much outbound traffic was detected?", "network", "firewall", "bytes")
-    if any(k in query_lower for k in ["network", "traffic", "firewall", "bytes", "exfiltrat", "outbound"]):
-        # Exact calculation: FW-301 (52,428,800 bytes = 50 MB) + FW-302 (157,286,400 bytes = 150 MB) = 209,715,200 bytes ≈ 200 MB
-        fw_events = [ev for ev in timeline if ev.get("source") == "Firewall Logs"]
-        ans = (
-            f"### Outbound Network Telemetry Analysis for {user_name} (`{target_user_id}`)\n\n"
-            f"**Total Outbound Volume**: **~200 MB** (`209,715,200` total bytes) across **2 distinct firewall connection events**.\n\n"
-            f"#### Exact Log Breakdown:\n"
-            f"1. **2026-09-14T14:25:00Z**: `52,428,800` bytes (**50 MB**) transferred to `198.51.100.44:443` (`Action: ALLOW`)\n"
-            f"2. **2026-09-14T14:28:00Z**: `157,286,400` bytes (**150 MB**) transferred to `198.51.100.44:8443` (`Action: ALLOW`)\n\n"
-            f"ℹ️ *Data Integrity Note*: The total volume across all events is **200 MB**. (150 MB / 157 MB refers to the second individual firewall event log line, not the cumulative total)."
-        )
-        return {
-            "answer": ans,
-            "active_user_id": target_user_id,
-            "investigation": report,
-            "quick_actions": ["Does network traffic alone prove exfiltration?", "Show evidence", "Show threats"],
-            "data_sources": ["Firewall Logs"]
-        }
-
-    # G. Endpoint Query ("What happened on the endpoint?", "EDR", "powershell", "lsass", "process")
-    if any(k in query_lower for k in ["endpoint", "edr", "powershell", "lsass", "process", "device"]):
-        edr_events = [ev for ev in timeline if "Endpoint" in ev.get("source", "")]
-        edr_text = "\n".join([f"• **{ev.get('timestamp')}**: `{ev.get('event_type')}` ({ev.get('severity')}) — *{ev.get('details')}*" for ev in edr_events])
-        ans = (
-            f"### Endpoint (EDR) Telemetry Analysis for {user_name} (`{target_user_id}`)\n\n"
-            f"Found **{len(edr_events)}** host-level security alerts recorded on device `DEV-LAPTOP-088` / `DEV-0101`:\n\n"
-            f"{edr_text}\n\n"
-            f"**Forensic Note**: The execution of encoded PowerShell commands (`EDR-801`) followed by memory dump attempts against `lsass.exe` (`EDR-802`) indicates credential harvesting prior to data transfer."
-        )
-        return {
-            "answer": ans,
-            "active_user_id": target_user_id,
-            "investigation": report,
-            "quick_actions": ["Show evidence", "What IAM activity occurred?", "Show recommendations"],
-            "data_sources": ["Endpoint Alerts (EDR)"]
-        }
-
-    # H. IAM Query ("What IAM activity occurred?", "privilege", "secret", "role")
-    if any(k in query_lower for k in ["iam", "role", "privilege", "secret", "vault", "permission"]):
-        iam_events = [ev for ev in timeline if "IAM" in ev.get("source", "")]
-        iam_text = "\n".join([f"• **{ev.get('timestamp')}**: `{ev.get('event_type')}` ({ev.get('severity')}) — *{ev.get('details')}*" for ev in iam_events])
-        ans = (
-            f"### Identity & Access Management (IAM) Audit Analysis for {user_name} (`{target_user_id}`)\n\n"
-            f"Found **{len(iam_events)}** IAM audit events:\n\n"
-            f"{iam_text}\n\n"
-            f"**Access Context**: User performed privilege escalation to `AWS_IAM_AdminRole` (`IAM-101`) and subsequently accessed sensitive vault credentials in `Vault_Prod_DB` (`IAM-102`)."
-        )
-        return {
-            "answer": ans,
-            "active_user_id": target_user_id,
-            "investigation": report,
-            "quick_actions": ["Show evidence", "What happened on the endpoint?", "Show timeline"],
-            "data_sources": ["IAM Audit Trail"]
-        }
-
-    # I. Status Query ("Is USR-1001 terminated?", "status", "employment")
-    if any(k in query_lower for k in ["status", "terminated", "active", "employee", "employment"]):
-        ident = get_identity_context(target_user_id)
-        ans = (
-            f"### Employment Status for {user_name} (`{target_user_id}`)\n\n"
-            f"• **Status**: `{status}`\n"
-            f"• **Termination Date**: `{ident.get('termination_date', 'N/A')}`\n"
-            f"• **Department**: `{ident.get('department', 'N/A')}`\n"
-            f"• **Role**: `{ident.get('role', 'N/A')}`\n"
-            f"• **Assigned Assets**: `{ident.get('assigned_assets', 'N/A')}`\n\n"
-            f"**Risk Implication**: {'⚠️ Post-termination activity detected after employee termination date!' if status == 'TERMINATED' else 'User is an active employee.'}"
-        )
-        return {
-            "answer": ans,
-            "active_user_id": target_user_id,
-            "investigation": report,
-            "quick_actions": ["Why is USR-1001 critical?", "Show evidence", "Show recommendations"],
-            "data_sources": ["Identity Asset Master"]
-        }
-
-    # J. Challenge / Uncertainty Query ("Are you sure this is data exfiltration?", "prove", "sure", "exfiltrate")
-    if any(k in query_lower for k in ["sure", "prove", "exfiltration", "challenge", "alone"]):
+    # F. Challenge / Uncertainty Query ("Does network traffic alone prove exfiltration?", "Are you sure this is data exfiltration?", "prove", "alone")
+    if any(k in query_lower for k in ["sure", "prove", "alone", "challenge", "uncertain", "doubt", "definitive", "false positive"]) or ("exfiltrat" in query_lower and any(k in query_lower for k in ["prove", "alone", "sure", "really", "does", "can", "true"])):
         ans = (
             f"### Threat Hypothesis Verification & Uncertainty Challenge\n\n"
             f"**Question**: Does 200 MB of outbound network traffic alone prove data exfiltration?\n\n"
@@ -446,6 +370,83 @@ def process_chat_query(query: str, context_user_id: str = "USR-1001") -> dict:
             "quick_actions": ["Show evidence", "What data sources did you use?", "Show recommendations"],
             "data_sources": ["Firewall Logs", "Threat Detections", "IAM Audit Trail", "Endpoint Alerts"]
         }
+
+    # G. Network / Traffic Query ("How much outbound traffic was detected?", "network", "firewall", "bytes")
+    if any(k in query_lower for k in ["network", "traffic", "firewall", "bytes", "outbound", "egress"]):
+        # Exact calculation: FW-301 (52,428,800 bytes = 50 MB) + FW-302 (157,286,400 bytes = 150 MB) = 209,715,200 bytes ≈ 200 MB
+        fw_events = [ev for ev in timeline if ev.get("source") == "Firewall Logs"]
+        ans = (
+            f"### Outbound Network Telemetry Analysis for {user_name} (`{target_user_id}`)\n\n"
+            f"**Total Outbound Volume**: **~200 MB** (`209,715,200` total bytes) across **2 distinct firewall connection events**.\n\n"
+            f"#### Exact Log Breakdown:\n"
+            f"1. **2026-09-14T14:25:00Z**: `52,428,800` bytes (**50 MB**) transferred to `198.51.100.44:443` (`Action: ALLOW`)\n"
+            f"2. **2026-09-14T14:28:00Z**: `157,286,400` bytes (**150 MB**) transferred to `198.51.100.44:8443` (`Action: ALLOW`)\n\n"
+            f"ℹ️ *Data Integrity Note*: The total volume across all events is **200 MB**. (150 MB / 157 MB refers to the second individual firewall event log line, not the cumulative total)."
+        )
+        return {
+            "answer": ans,
+            "active_user_id": target_user_id,
+            "investigation": report,
+            "quick_actions": ["Does network traffic alone prove exfiltration?", "Show evidence", "Show threats"],
+            "data_sources": ["Firewall Logs"]
+        }
+
+    # H. Endpoint Query ("What happened on the endpoint?", "EDR", "powershell", "lsass", "process")
+    if any(k in query_lower for k in ["endpoint", "edr", "powershell", "lsass", "process", "device"]):
+        edr_events = [ev for ev in timeline if "Endpoint" in ev.get("source", "")]
+        edr_text = "\n".join([f"• **{ev.get('timestamp')}**: `{ev.get('event_type')}` ({ev.get('severity')}) — *{ev.get('details')}*" for ev in edr_events])
+        ans = (
+            f"### Endpoint (EDR) Telemetry Analysis for {user_name} (`{target_user_id}`)\n\n"
+            f"Found **{len(edr_events)}** host-level security alerts recorded on device `DEV-LAPTOP-088` / `DEV-0101`:\n\n"
+            f"{edr_text}\n\n"
+            f"**Forensic Note**: The execution of encoded PowerShell commands (`EDR-801`) followed by memory dump attempts against `lsass.exe` (`EDR-802`) indicates credential harvesting prior to data transfer."
+        )
+        return {
+            "answer": ans,
+            "active_user_id": target_user_id,
+            "investigation": report,
+            "quick_actions": ["Show evidence", "What IAM activity occurred?", "Show recommendations"],
+            "data_sources": ["Endpoint Alerts (EDR)"]
+        }
+
+    # I. IAM Query ("What IAM activity occurred?", "privilege", "secret", "role")
+    if any(k in query_lower for k in ["iam", "role", "privilege", "secret", "vault", "permission"]):
+        iam_events = [ev for ev in timeline if "IAM" in ev.get("source", "")]
+        iam_text = "\n".join([f"• **{ev.get('timestamp')}**: `{ev.get('event_type')}` ({ev.get('severity')}) — *{ev.get('details')}*" for ev in iam_events])
+        ans = (
+            f"### Identity & Access Management (IAM) Audit Analysis for {user_name} (`{target_user_id}`)\n\n"
+            f"Found **{len(iam_events)}** IAM audit events:\n\n"
+            f"{iam_text}\n\n"
+            f"**Access Context**: User performed privilege escalation to `AWS_IAM_AdminRole` (`IAM-101`) and subsequently accessed sensitive vault credentials in `Vault_Prod_DB` (`IAM-102`)."
+        )
+        return {
+            "answer": ans,
+            "active_user_id": target_user_id,
+            "investigation": report,
+            "quick_actions": ["Show evidence", "What happened on the endpoint?", "Show timeline"],
+            "data_sources": ["IAM Audit Trail"]
+        }
+
+    # J. Status Query ("Is USR-1001 terminated?", "status", "employment")
+    if any(k in query_lower for k in ["status", "terminated", "active", "employee", "employment"]):
+        ident = get_identity_context(target_user_id)
+        ans = (
+            f"### Employment Status for {user_name} (`{target_user_id}`)\n\n"
+            f"• **Status**: `{status}`\n"
+            f"• **Termination Date**: `{ident.get('termination_date', 'N/A')}`\n"
+            f"• **Department**: `{ident.get('department', 'N/A')}`\n"
+            f"• **Role**: `{ident.get('role', 'N/A')}`\n"
+            f"• **Assigned Assets**: `{ident.get('assigned_assets', 'N/A')}`\n\n"
+            f"**Risk Implication**: {'⚠️ Post-termination activity detected after employee termination date!' if status == 'TERMINATED' else 'User is an active employee.'}"
+        )
+        return {
+            "answer": ans,
+            "active_user_id": target_user_id,
+            "investigation": report,
+            "quick_actions": ["Why is USR-1001 critical?", "Show evidence", "Show recommendations"],
+            "data_sources": ["Identity Asset Master"]
+        }
+
 
     # K. Recommendations Query ("What should the SOC analyst do next?", "recommend", "next steps")
     if any(k in query_lower for k in ["recommend", "next step", "what should", "action", "remediation"]):
@@ -475,7 +476,7 @@ def process_chat_query(query: str, context_user_id: str = "USR-1001") -> dict:
             f"4. **Firewall Logs**: `data/processed/track2_firewall_logs_clean.csv` (Outbound byte volume, IP/Port telemetry)\n"
             f"5. **User Risk Scores**: `data/analytics/user_risk_scores.csv` (Pre-computed 6-dimensional risk metrics)\n"
             f"6. **Threat Detections**: `data/analytics/threat_detections.csv` (Active threat detection rules)\n\n"
-            f"Zero data is fabricated or halluncinated."
+            f"Zero data is fabricated or hallucinated."
         )
         return {
             "answer": ans,
@@ -501,6 +502,19 @@ def process_chat_query(query: str, context_user_id: str = "USR-1001") -> dict:
         "quick_actions": ["Why this risk?", "Show evidence", "Show timeline", "Show threats", "Show recommendations"],
         "data_sources": ["Identity Asset Master", "IAM Audit Trail", "Endpoint Alerts", "Firewall Logs", "Threat Detections"]
     }
+
+def process_chat_query(query: str, context_user_id: str = "USR-1001") -> dict:
+    """
+    Main entrypoint for processing natural language analyst chat queries.
+    Ensures both quick_actions and suggested_actions are provided for frontend/API contracts.
+    """
+    res = _process_chat_query_raw(query, context_user_id)
+    if isinstance(res, dict):
+        if "suggested_actions" not in res and "quick_actions" in res:
+            res["suggested_actions"] = list(res["quick_actions"])
+        if "quick_actions" not in res and "suggested_actions" in res:
+            res["quick_actions"] = list(res["suggested_actions"])
+    return res
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Conversational AI Security Investigation Assistant")

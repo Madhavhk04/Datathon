@@ -56,7 +56,7 @@ def snapshot():
     for r in queue:
         r["risk_score"] = number(r, "risk_score")
         r["threat_detection_count"] = int(number(r, "threat_detection_count"))
-    critical = sum(1 for r in risk if r.get("risk_level") == "Critical")
+    critical = sum(1 for r in risk if str(r.get("risk_level", "")).strip().capitalize() == "Critical")
     quality = []
     for path in sorted(PROCESSED.glob("*.csv")):
         with path.open(encoding="utf-8-sig", newline="") as f:
@@ -80,6 +80,11 @@ def analyst_query(req: AnalystQueryRequest):
         context_user = req.context_user_id
 
     result = process_chat_query(q, context_user)
+    if isinstance(result, dict):
+        if "suggested_actions" not in result and "quick_actions" in result:
+            result["suggested_actions"] = result["quick_actions"]
+        if "quick_actions" not in result and "suggested_actions" in result:
+            result["quick_actions"] = result["suggested_actions"]
     return result
 
 @app.get("/api/investigate/{user_id}")
