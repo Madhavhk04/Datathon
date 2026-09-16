@@ -25,59 +25,125 @@ def _clean_val(v: Any, default: Any = "") -> Any:
         return default
     return v
 
+def user_exists_in_dataset(user_id: str) -> bool:
+    """Check if a user ID exists in either Identity Master or User Risk Scores datasets."""
+    if not user_id or str(user_id).startswith("NOT_FOUND:"):
+        return False
+    uid = str(user_id).strip().upper()
+    id_df = _get_df(os.path.join("processed", "track2_identity_asset_master_clean.csv"))
+    if not id_df.empty and "user_id" in id_df.columns:
+        if uid in id_df["user_id"].astype(str).str.upper().values:
+            return True
+    risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
+    if not risk_df.empty and "user_id" in risk_df.columns:
+        if uid in risk_df["user_id"].astype(str).str.upper().values:
+            return True
+    return False
+
 def resolve_target_user_id(query_or_id: str) -> str:
     """
     Resolves natural language name or user ID to canonical uppercase user ID (e.g. EMP11218).
-    Supports direct IDs, usernames, and full employee names.
+    Returns NOT_FOUND:ID if an explicit ID was provided that does not exist in the datasets.
     """
     raw = str(query_or_id).strip()
     if not raw:
-        risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
-        if not risk_df.empty and "user_id" in risk_df.columns:
-            return str(risk_df.sort_values(by="risk_score", ascending=False).iloc[0]["user_id"]).upper()
         return ""
     
     import re
     clean = raw.upper()
+
+    # Demo alias map for USR-100x IDs to dataset EMP IDs
+    alias_map = {
+        "USR-1001": "EMP11218",
+        "USR-1002": "EMP10296",
+        "USR-1003": "EMP11241",
+        "USR-1004": "EMP12745"
+    }
+    if clean in alias_map:
+        return alias_map[clean]
+
     # Check if string contains explicit EMP or USR pattern
-    emp_match = re.search(r'\b(EMP\d{4,6}|USR-\d{4})\b', raw, re.IGNORECASE)
+    emp_match = re.search(r'\b(EMP\s*[-_]?\s*\d{1,6}|USR\s*[-_]?\s*\d{1,6})\b', raw, re.IGNORECASE)
     if emp_match:
-        return emp_match.group(1).upper()
+        raw_m = emp_match.group(1).upper()
+        matched_id = re.sub(r'[\s\-_]', '', raw_m)
+        if raw_m.startswith("USR") and "-" in raw_m:
+            matched_id = raw_m
+        resolved = alias_map.get(matched_id, matched_id)
+        if user_exists_in_dataset(resolved):
+            return resolved
+        return f"NOT_FOUND:{matched_id}"
 
-    # Direct match in Risk Scores
-    risk_df = _get_df(os.path.join("analytics", "user_risk_scores.csv"))
-    if not risk_df.empty and "user_id" in risk_df.columns:
-        if clean in risk_df["user_id"].astype(str).str.upper().values:
-            return clean
+    # Direct match in Risk Scores or Identity Master
+    if user_exists_in_dataset(clean):
+        return clean
 
-    # Direct match in Identity Master
+    # Name match or Username match in Identity Master
     id_df = _get_df(os.path.join("processed", "track2_identity_asset_master_clean.csv"))
-    if not id_df.empty and "user_id" in id_df.columns:
-        if clean in id_df["user_id"].astype(str).str.upper().values:
-            return clean
-        
-        # Name match
+    if not id_df.empty:
         raw_lower = raw.lower()
         if "full_name" in id_df.columns:
             name_matches = id_df[id_df["full_name"].astype(str).str.lower() == raw_lower]
             if not name_matches.empty:
                 return str(name_matches.iloc[0]["user_id"]).upper()
-        
-        # Username match
         if "username" in id_df.columns:
             uname_matches = id_df[id_df["username"].astype(str).str.lower() == raw_lower]
             if not uname_matches.empty:
                 return str(uname_matches.iloc[0]["user_id"]).upper()
-        
-        # Word-level name match (e.g. "Karan" in "Karan Goda")
-        if "full_name" in id_df.columns:
-            for word in raw_lower.split():
-                if len(word) >= 3:
-                    p_matches = id_df[id_df["full_name"].astype(str).str.lower().str.contains(r'\b' + re.escape(word) + r'\b', regex=True)]
-                    if not p_matches.empty:
-                        return str(p_matches.iloc[0]["user_id"]).upper()
 
     return ""
+
+def resolve_target_user_ids(query_or_id: str) -> list:
+    """
+    Extracts ALL target user IDs or names mentioned in a query string.
+    Returns NOT_FOUND:ID entries for explicit user IDs not present in datasets.
+    """
+    raw = str(query_or_id).strip()
+    if not raw:
+        return []
+    
+    import re
+    found_ids = []
+
+    alias_map = {
+        "USR-1001": "EMP11218",
+        "USR-1002": "EMP10296",
+        "USR-1003": "EMP11241",
+        "USR-1004": "EMP12745"
+    }
+
+    # 1. Regex search for explicit user ID patterns: USR-XXXX or EMPXXXXX / EMP789
+    matches = re.findall(r'\b(EMP\s*[-_]?\s*\d{1,6}|USR\s*[-_]?\s*\d{1,6})\b', raw, re.IGNORECASE)
+    for m in matches:
+        raw_m = m.upper()
+        uid_raw = re.sub(r'[\s\-_]', '', raw_m)
+        if raw_m.startswith("USR") and "-" in raw_m:
+            uid_raw = raw_m
+        uid = alias_map.get(uid_raw, uid_raw)
+        if user_exists_in_dataset(uid):
+            if uid not in found_ids:
+                found_ids.append(uid)
+        else:
+            not_found_tag = f"NOT_FOUND:{uid_raw}"
+            if not_found_tag not in found_ids:
+                found_ids.append(not_found_tag)
+            
+    # 2. Match names against Identity Master
+    id_df = _get_df(os.path.join("processed", "track2_identity_asset_master_clean.csv"))
+    if not id_df.empty and "full_name" in id_df.columns:
+        for idx, row in id_df.iterrows():
+            fname = str(row.get("full_name", "")).strip()
+            uname = str(row.get("username", "")).strip()
+            uid = str(row.get("user_id", "")).strip().upper()
+            if uid and uid not in found_ids:
+                if fname and len(fname) >= 4 and re.search(r'\b' + re.escape(fname) + r'\b', raw, re.IGNORECASE):
+                    found_ids.append(uid)
+                elif uname and len(uname) >= 4 and re.search(r'\b' + re.escape(uname) + r'\b', raw, re.IGNORECASE):
+                    found_ids.append(uid)
+
+    return found_ids
+
+
 
 def get_identity_context(user_id: str) -> dict:
     """

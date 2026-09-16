@@ -18,7 +18,7 @@ except ImportError:
     pass
 
 try:
-    from agent import investigate_user
+    from agent import investigate_user, chat_with_analyst
     from tools import resolve_target_user_id
     AGENT_AVAILABLE = True
 except Exception as e:
@@ -28,7 +28,7 @@ except Exception as e:
 ANALYTICS = ROOT / "data" / "analytics"
 PROCESSED = ROOT / "data" / "processed"
 
-app = FastAPI(title="Sentinel SOC local API", version="1.0")
+app = FastAPI(title="Sentinel API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -58,6 +58,7 @@ class AnalystQueryRequest(BaseModel):
     query: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
     context_user_id: Optional[str] = None
+    history: Optional[list] = None
 
 @app.get("/api/health")
 @app.get("/health")
@@ -96,52 +97,10 @@ def analyst_query(req: AnalystQueryRequest):
     elif req.context_user_id:
         context_user = str(req.context_user_id).strip()
     
-    target_user = resolve_target_user_id(q) if q else ""
-    if not target_user or target_user == "UNKNOWN":
-        target_user = context_user or resolve_target_user_id("")
+    history = req.history or []
     
-    report = investigate_user(target_user)
-    
-    u_name = report.get("user_name") or target_user
-    u_status = report.get("employment_status", "Active")
-    risk_info = report.get("overall_risk", {})
-    score = risk_info.get("score", 0)
-    band = risk_info.get("band", "UNKNOWN")
-    
-    drivers_list = report.get("key_drivers", [])
-    drivers = "\n".join([f"• {d}" for d in drivers_list]) if drivers_list else "• Routine telemetry patterns observed."
-    
-    findings_list = report.get("critical_findings", [])
-    findings = "\n".join([f"• {f}" for f in findings_list]) if findings_list else "• No critical anomalies recorded."
-    
-    steps_list = report.get("recommended_next_steps", [])
-    steps = "\n".join([f"1. {s}" for s in steps_list]) if steps_list else "1. Continue routine security monitoring."
-    
-    answer = (
-        f"### Security Investigation Brief: {u_name} (`{target_user}`)\n\n"
-        f"• **Employment Status**: `{u_status}`\n"
-        f"• **Risk Score**: `{score}/100` ({band} RISK)\n\n"
-        f"#### Key Risk Drivers\n{drivers}\n\n"
-        f"#### Correlated Findings\n{findings}\n\n"
-        f"#### Recommended Actions\n{steps}"
-    )
-    
-    actions = [f"Investigate {target_user}", "Show evidence", "Show timeline"]
-    return {
-        "answer": answer,
-        "active_user_id": target_user,
-        "investigation": report,
-        "quick_actions": actions,
-        "suggested_actions": actions,
-        "data_sources": [
-            "Identity Asset Master (track2_identity_asset_master_clean.csv)",
-            "IAM Audit Trail (track2_iam_audit_trail_clean.csv)",
-            "Endpoint Alerts (track2_endpoint_alerts_clean.csv)",
-            "Firewall Logs (track2_firewall_logs_clean.csv)",
-            "User Risk Scores (user_risk_scores.csv)",
-            "Threat Detections (threat_detections.csv)"
-        ]
-    }
+    return chat_with_analyst(q, history=history, context_user_id=context_user)
+
 
 @app.get("/api/investigate/{user_id}")
 @app.post("/api/investigate/{user_id}")
@@ -154,4 +113,7 @@ def investigate(user_id: str):
     if isinstance(res, dict) and "overall_risk" in res and "risk" not in res:
         res["risk"] = res["overall_risk"]
     return res
+
+# Sentinel API reloaded
+
 
