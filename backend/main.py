@@ -114,6 +114,6 @@ def investigate(user_id: str):
         res["risk"] = res["overall_risk"]
     return res
 
-# Sentinel API reloaded
+# Sentinel API reloaded v3
 
 

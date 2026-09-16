@@ -506,8 +506,15 @@ def chat_with_analyst(question: str, history: list = None, context_user_id: str 
             "data_sources": ["Identity Asset Master", "IAM Audit Trail", "Endpoint Alerts", "Firewall Logs", "User Risk Scores", "Threat Detections"]
         }
 
-    # 1. Direct deterministic extraction from current question FIRST
+    # 1. Check if query is a general concept question (e.g. "Explain MFA", "What is ITDR")
     explicit_q_users = resolve_target_user_ids(q_strip)
+    concept_keywords = ["what is", "explain", "how does", "tell me about", "definition", "best practices", "cybersecurity"]
+    is_concept_query = not explicit_q_users and any(k in q_lower for k in concept_keywords)
+
+    if is_concept_query:
+        return generate_grounded_fallback_response(q_strip, target_users=[], evidence_bundle={}, context_user_id=context_user_id)
+
+    # 1b. Direct deterministic extraction from current question FIRST
     if explicit_q_users:
         not_found_users = [u.replace("NOT_FOUND:", "") for u in explicit_q_users if str(u).startswith("NOT_FOUND:")]
         if not_found_users:
@@ -638,13 +645,21 @@ def generate_grounded_fallback_response(question: str, target_users: list = None
     if evidence_bundle is None:
         evidence_bundle = {}
 
+    explicit_users = resolve_target_user_ids(q_strip)
     has_pronouns = any(p in q_lower.split() for p in ["he", "she", "him", "her", "his", "hers", "this", "they", "them", "their", "user", "user's"])
-    if not target_users:
-        resolved = resolve_target_user_ids(q_strip)
-        if resolved:
-            target_users = resolved
-        elif context_user_id and has_pronouns:
-            target_users = [resolve_target_user_id(context_user_id)]
+    
+    # Check if query is a general concept query without explicit user ID
+    concept_keywords = ["what is", "explain", "how does", "tell me about", "definition", "best practices", "cybersecurity"]
+    is_concept = not explicit_users and any(k in q_lower for k in concept_keywords)
+
+    if is_concept:
+        target_users = []
+    else:
+        if not target_users:
+            if explicit_users:
+                target_users = explicit_users
+            elif context_user_id and has_pronouns:
+                target_users = [resolve_target_user_id(context_user_id)]
 
     not_found_users = [u.replace("NOT_FOUND:", "") for u in target_users if str(u).startswith("NOT_FOUND:")]
     if not_found_users:
@@ -698,7 +713,10 @@ def generate_grounded_fallback_response(question: str, target_users: list = None
         }
 
     # 2. General Cybersecurity Concept Queries (No specific target user)
-    if not target_users and any(k in q_lower for k in ["what is soc", "what is itdr", "what is phishing", "what is mfa", "what is edr", "what is lateral movement", "what is data exfiltration", "how to remediate", "best practices", "cybersecurity"]):
+    concept_keywords = ["what is", "explain", "how does", "tell me about", "definition", "best practices", "cybersecurity"]
+    is_concept_query = not explicit_users and any(k in q_lower for k in concept_keywords)
+    
+    if is_concept_query:
         if "soc" in q_lower or "itdr" in q_lower:
             answer = (
                 "### Identity Threat Detection & Response (ITDR)\n\n"
@@ -709,7 +727,7 @@ def generate_grounded_fallback_response(question: str, target_users: list = None
                 "• **Network Telemetry**: Monitoring firewall byte volumes and suspicious outbound connection destinations.\n"
                 "• **Risk Scoring & Triage**: Prioritizing compromised accounts for immediate containment."
             )
-        elif "mfa" in q_lower:
+        elif "mfa" in q_lower or "multi-factor" in q_lower:
             answer = (
                 "### Multi-Factor Authentication (MFA)\n\n"
                 "**Multi-Factor Authentication (MFA)** requires users to provide two or more verification factors to gain access to resources.\n\n"
@@ -731,6 +749,17 @@ def generate_grounded_fallback_response(question: str, target_users: list = None
                 "3. **Inspect Endpoint Alerts**: Audit suspicious command-line executions, process spawning, and unapproved scripts.\n"
                 "4. **Analyze Network Logs**: Cross-reference byte transfer volumes and foreign destination IPs."
             )
+        
+        primary_user = context_user_id or "EMP11218"
+        return {
+            "answer": answer,
+            "active_user_id": primary_user,
+            "target_users": [],
+            "evidence": {},
+            "quick_actions": ["Investigate EMP11218", "Which accounts are critical?", "Show summary of threats"],
+            "suggested_actions": ["Investigate EMP11218", "Which accounts are critical?"],
+            "data_sources": ["Identity Asset Master"]
+        }
 
     # 2.5. Critical Risk Accounts Queries (e.g., "Which accounts are critical?", "Which users are critical?")
     if not target_users and any(k in q_lower for k in ["critical", "high risk accounts", "who is critical", "which accounts", "which users"]):
@@ -893,7 +922,11 @@ def generate_grounded_fallback_response(question: str, target_users: list = None
         else:
             lines = [f"### MFA Telemetry: {uname} (`{uid}`)\n"]
             for m in mfa_fails[:5]:
-                lines.append(f"• `{m.get('timestamp')}` — Event: `{m.get('event_type')}`, Method: `{m.get('auth_method')}`, Reason: `{m.get('failure_reason')}`")
+                ev_type = str(m.get('event_type') or 'AUTHENTICATION').strip()
+                method = str(m.get('auth_method') or 'N/A').strip()
+                reason = str(m.get('failure_reason') or 'N/A').strip()
+                ts = str(m.get('timestamp') or 'Unknown Time').strip()
+                lines.append(f"• `{ts}` — Event: `{ev_type}`, Method: `{method}`, Reason: `{reason}`")
             answer = "\n".join(lines)
 
     # 9. Why critical / Risk breakdown query
