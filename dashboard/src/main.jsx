@@ -940,6 +940,7 @@ function SentinelAiModal({ initialQuery = '', userList = [], onClose }) {
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
     html = html.replace(/`([^`]+)`/g, '<code style="background: #F1F5F9; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #6366F1;">$1</code>');
+    html = html.replace(/`/g, '');
     html = html.replace(/\n/g, '<br/>');
     return html;
   };
